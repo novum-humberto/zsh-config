@@ -12,7 +12,7 @@ nvim README.md
 
 **Contenido completo**:
 
-```markdown
+
 # zsh-config
 
 Configuración modular de Zsh para  ( Linux). 
@@ -272,6 +272,6 @@ MIT. Ver [LICENSE](LICENSE).
 **Proyecto**: migración de un `.zshrc` de 10 años a una estructura modular.
 **Estado**: funcional, documentado, en uso diario.
 **Reproducible**: dentro de 15 años, si alguien quiere.
-```
+
 
 
