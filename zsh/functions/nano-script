@@ -1,0 +1,65 @@
+# nano-script / new-script
+# ================================================================
+# Crea un archivo nuevo a partir de una plantilla y lo abre en nvim.
+#
+# Detecta la extensión del archivo destino y usa la plantilla
+# correspondiente:
+#   .sh    → ~/Plantillas/new.sh    (bash)
+#   .py    → ~/Plantillas/new.py    (python)
+#   .zsh   → ~/Plantillas/new.zsh   (zsh)
+#   .md    → ~/Plantillas/new.md    (markdown)
+#
+# Si no hay plantilla para esa extensión, usa new.sh como fallback.
+# Para scripts (.sh, .py, .zsh) da permisos de ejecución.
+#
+# Uso:  nano-script <nombre>.<ext>
+# Ej:   nano-script backup.sh
+#       nano-script hola.py
+#       nano-script notas.md
+#
+# Alias: new-script (más natural)
+# ================================================================
+
+nano-script() {
+    if [[ $# -eq 0 ]]; then
+        echo "Uso: nano-script <nombre>.<ext>"
+        echo "Extensiones con plantilla: sh, py, zsh, md"
+        return 1
+    fi
+
+    local target="$1"
+    local ext="${target##*.}"
+    local template_dir="$HOME/Plantillas"
+    local template="$template_dir/new.$ext"
+
+    # Fallback a new.sh si no hay plantilla específica
+    if [[ ! -f "$template" ]]; then
+        echo "Aviso: no hay plantilla para .$ext, usando new.sh"
+        template="$template_dir/new.sh"
+    fi
+
+    # Verificar que la plantilla existe
+    if [[ ! -f "$template" ]]; then
+        echo "Error: no existe $template"
+        return 1
+    fi
+
+    # Verificar que el destino no existe ya
+    if [[ -e "$target" ]]; then
+        echo "Error: ya existe $target"
+        return 1
+    fi
+
+    # Copiar plantilla al destino
+    cp "$template" "$target"
+
+    # Dar permisos de ejecución solo a scripts
+    case "$ext" in
+        sh|py|zsh|bash)
+            chmod +x "$target"
+            ;;
+    esac
+
+    # Abrir en nvim
+    nvim "$target"
+}

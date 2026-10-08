@@ -1,0 +1,162 @@
+# clamav-virus
+# ================================================================
+# Menú interactivo de ClamAV.
+#
+# Ofrece 10 opciones: escanear archivo, directorio, todo el sistema,
+# con clamdscan, actualizar base de datos, ver versión, ayuda, y
+# escanear moviendo infectados a cuarentena.
+#
+# Los infectados se mueven a ~/cuarentena_clamav/ (opción 9).
+#
+# Uso:  clamav-virus
+# Alias: virus (definido en 95-func-shortcuts.sh)
+# ================================================================
+
+clamav-virus() {
+    # --- Colores ---
+    local VERDE='\033[0;32m'
+    local ROJO='\033[0;31m'
+    local AZUL='\033[0;34m'
+    local CYAN='\033[0;36m'
+    local AMARILLO='\033[0;33m'
+    local NC='\033[0m'
+
+    # --- Directorio de cuarentena ---
+    local dir_cuarentena="$HOME/cuarentena_clamav"
+
+    # --- Banner ---
+    clear
+    echo ""
+    echo -e "${CYAN}=================================================${NC}"
+    echo -e "${CYAN}          ClamAV - Antivirus interactivo         ${NC}"
+    echo -e "${CYAN}=================================================${NC}"
+    echo ""
+
+    # --- Verificar dependencias ---
+    local cmd
+    for cmd in clamscan freshclam; do
+        if ! command -v "$cmd" &>/dev/null; then
+            echo -e "${ROJO}Error: $cmd no está instalado.${NC}"
+            return 1
+        fi
+    done
+
+    # --- Crear directorio de cuarentena si no existe ---
+    [[ -d "$dir_cuarentena" ]] || mkdir -p "$dir_cuarentena"
+
+    # --- Bucle principal ---
+    while true; do
+        echo ""
+        echo -e "${VERDE}=== Menú ClamAV ===${NC}"
+        echo "1)  Escanear archivo"
+        echo "2)  Escanear directorio (recursivo)"
+        echo "3)  Escanear directorio mostrando solo infectados"
+        echo "4)  Escanear todo el sistema (con exclusiones) — ¡requiere sudo!"
+        echo "5)  Escanear con clamdscan (rápido, si clamd está activo)"
+        echo "6)  Actualizar base de datos (freshclam)"
+        echo "7)  Ver versión de ClamAV"
+        echo "8)  Ayuda detallada"
+        echo "9)  Escanear y mover infectados a cuarentena ($dir_cuarentena)"
+        echo "0)  Salir"
+        echo ""
+
+        local opcion=""
+        read -r "opcion?${AMARILLO}Seleccione una opción: ${NC}"
+
+        case "$opcion" in
+            1)
+                local archivo=""
+                read -r "archivo?Ruta del archivo a escanear: "
+                if [[ -f "$archivo" ]]; then
+                    clamscan "$archivo"
+                else
+                    echo -e "${ROJO}Archivo no encontrado: '$archivo'${NC}"
+                fi
+                ;;
+            2)
+                local dir=""
+                read -r "dir?Ruta del directorio a escanear: "
+                if [[ -d "$dir" ]]; then
+                    clamscan -r "$dir"
+                else
+                    echo -e "${ROJO}Directorio no válido: '$dir'${NC}"
+                fi
+                ;;
+            3)
+                local dir=""
+                read -r "dir?Ruta del directorio: "
+                if [[ -d "$dir" ]]; then
+                    clamscan -r --infected "$dir"
+                else
+                    echo -e "${ROJO}Directorio no válido: '$dir'${NC}"
+                fi
+                ;;
+            4)
+                echo -e "${ROJO}ATENCIÓN: Este escaneo puede tardar mucho y requiere permisos de superusuario.${NC}"
+                local confirm=""
+                read -r "confirm?¿Continuar? (s/N): "
+                if [[ "$confirm" =~ ^[sSyY]$ ]]; then
+                    sudo clamscan -r / --infected \
+                        --exclude-dir="^/proc" \
+                        --exclude-dir="^/sys" \
+                        --exclude-dir="^/dev"
+                else
+                    echo "Escaneo cancelado."
+                fi
+                ;;
+            5)
+                if ! pgrep -x clamd &>/dev/null; then
+                    echo -e "${AZUL}clamd no está corriendo. Inícialo con 'sudo systemctl start clamav-daemon'.${NC}"
+                fi
+                local ruta=""
+                read -r "ruta?Ruta a escanear con clamdscan: "
+                if [[ -e "$ruta" ]]; then
+                    clamdscan --infected "$ruta"
+                else
+                    echo -e "${ROJO}La ruta '$ruta' no existe.${NC}"
+                fi
+                ;;
+            6)
+                echo "Actualizando base de datos..."
+                sudo freshclam
+                ;;
+            7)
+                clamscan --version
+                ;;
+            8)
+                echo -e "${VERDE}=== Ayuda detallada ===${NC}"
+                echo "clamscan archivo                 → Escanea un solo archivo"
+                echo "clamscan -r ~/Descargas          → Escanea recursivamente una carpeta"
+                echo "clamscan -r --infected ~/Docs    → Solo muestra infectados"
+                echo 'sudo clamscan -r / --infected --exclude-dir="^/proc" → Sistema completo'
+                echo "clamdscan --infected ~/Descargas → Escaneo rápido con el demonio"
+                echo "sudo freshclam                   → Actualiza la base de firmas"
+                echo ""
+                echo "Ejemplo con cuarentena y log:"
+                echo "  clamscan -r --infected --move=$dir_cuarentena --log=\$HOME/clamav.log ~/Descargas"
+                ;;
+            9)
+                local dir=""
+                read -r "dir?Ruta del directorio a escanear (infectados van a $dir_cuarentena): "
+                if [[ -d "$dir" ]]; then
+                    local loguear=""
+                    read -r "loguear?¿Desea guardar un log? (s/N): "
+                    local log_op=""
+                    [[ "$loguear" =~ ^[sSyY]$ ]] && log_op="--log=$HOME/clamav_scan.log"
+                    clamscan -r --infected --move="$dir_cuarentena" $log_op "$dir"
+                    echo ""
+                    echo "Los archivos infectados (si los hay) fueron movidos a: $dir_cuarentena"
+                else
+                    echo -e "${ROJO}Directorio no válido: '$dir'${NC}"
+                fi
+                ;;
+            0)
+                echo "Saliendo del menú ClamAV."
+                break
+                ;;
+            *)
+                echo -e "${ROJO}Opción inválida.${NC}"
+                ;;
+        esac
+    done
+}

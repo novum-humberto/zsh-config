@@ -1,0 +1,420 @@
+#!/usr/bin/env bash
+# ================================================================
+# zsh-backup — Backup y restauración de la configuración modular de Zsh
+#
+# Uso:
+#   zsh-backup                  # menú interactivo
+#   zsh-backup backup [ruta]    # backup directo a una ruta
+#   zsh-backup restore [ruta]   # restauración desde una ruta
+#
+# Estructura del backup:
+#   ZSH-Backup/
+#   ├── zshenv               ← copia de ~/.zshenv
+#   ├── zsh/                 ← copia de ~/.config/zsh/
+#   ├── cryptosith/          ← copia de ~/.config/cryptosith/
+#   ├── foot.ini             ← copia de ~/.config/foot/foot.ini
+#   └── METADATA.txt         ← fecha, host, usuario
+#
+# Ubicación: ~/.local/bin/zsh-backup
+# ================================================================
+
+set -euo pipefail
+
+# --- Colores ---
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
+readonly BOLD='\033[1m'
+readonly NC='\033[0m'
+
+# --- Rutas ---
+readonly HOME_DIR="$HOME"
+readonly ZSHENV_SRC="$HOME/.zshenv"
+readonly ZSH_DIR_SRC="$HOME/.config/zsh"
+readonly CRYPTOSITH_DIR_SRC="$HOME/.config/cryptosith"
+readonly FOOT_INI_SRC="$HOME/.config/foot/foot.ini"
+readonly BACKUP_DIR_NAME="ZSH-Backup"
+
+# --- Funciones auxiliares ---
+info()    { echo -e "${CYAN}→ $1${NC}"; }
+ok()      { echo -e "${GREEN}✓ $1${NC}"; }
+warn()    { echo -e "${YELLOW}⚠ $1${NC}"; }
+die()     { echo -e "${RED}✗ Error: $1${NC}" >&2; exit 1; }
+header()  { echo -e "${BOLD}$1${NC}"; }
+
+pausa() {
+    echo ""
+    read -rp "Presiona [Enter] para continuar..."
+}
+
+confirmar() {
+    local prompt="$1"
+    local resp
+    read -rp "$prompt (s/N): " resp
+    [[ "$resp" =~ ^[sSyY]$ ]]
+}
+
+# ================================================================
+# MODO BACKUP
+# ================================================================
+hacer_backup() {
+    local destino="${1:-}"
+
+    header "═══════════════════════════════════════════════════════"
+    header "          BACKUP DE LA CONFIGURACIÓN DE ZSH            "
+    header "═══════════════════════════════════════════════════════"
+    echo ""
+
+    # Pedir ruta si no se pasó por argumento
+    if [[ -z "$destino" ]]; then
+        echo -e "${YELLOW}¿Dónde quieres guardar el backup?${NC}"
+        echo "  Ejemplos:"
+        echo "    /run/media/usuario/USB/"
+        echo "    /mnt/disco-externo/salvas/"
+        echo "    $HOME/salvas/"
+        echo ""
+        read -rp "Ruta destino: " destino
+    fi
+
+    # Normalizar ruta (quitar barra final)
+    destino="${destino%/}"
+
+    [[ -z "$destino" ]] && die "Ruta vacía"
+
+    # Verificar que el destino existe (o crearlo)
+    if [[ ! -d "$destino" ]]; then
+        if confirmar "La ruta '$destino' no existe. ¿Crearla?"; then
+            mkdir -p "$destino" || die "No se pudo crear $destino"
+            ok "Directorio creado: $destino"
+        else
+            die "Cancelado"
+        fi
+    fi
+
+    # Verificar que el destino es escribible
+    [[ -w "$destino" ]] || die "No tienes permiso de escritura en $destino"
+
+    # Ruta final del backup
+    local backup_path="$destino/$BACKUP_DIR_NAME"
+
+    # Si ya existe, preguntar
+    if [[ -d "$backup_path" ]]; then
+        warn "Ya existe un backup en: $backup_path"
+        if confirmar "¿Sobrescribir el existente?"; then
+            command rm -rf "$backup_path"
+            ok "Backup anterior eliminado"
+        else
+            # Añadir timestamp
+            backup_path="${destino}/${BACKUP_DIR_NAME}-$(date +%Y%m%d-%H%M%S)"
+            info "Se guardará como: $backup_path"
+        fi
+    fi
+
+    # Crear estructura
+    mkdir -p "$backup_path" || die "No se pudo crear $backup_path"
+    info "Guardando en: $backup_path"
+    echo ""
+
+    # --- Copiar .zshenv ---
+    if [[ -f "$ZSHENV_SRC" ]]; then
+        cp "$ZSHENV_SRC" "$backup_path/zshenv"
+        ok "Copiado: ~/.zshenv"
+    else
+        warn "No existe ~/.zshenv (¿config no instalada?)"
+    fi
+
+    # --- Copiar carpeta ~/.config/zsh/ ---
+    if [[ -d "$ZSH_DIR_SRC" ]]; then
+        info "Copiando ~/.config/zsh/ (puede tardar si hay _archive)..."
+        cp -r "$ZSH_DIR_SRC" "$backup_path/zsh"
+        ok "Copiada: carpeta ~/.config/zsh/"
+    else
+        die "No existe $ZSH_DIR_SRC"
+    fi
+
+    # --- Copiar cryptosith (manual) ---
+    if [[ -d "$CRYPTOSITH_DIR_SRC" ]]; then
+        cp -r "$CRYPTOSITH_DIR_SRC" "$backup_path/cryptosith"
+        ok "Copiada: carpeta ~/.config/cryptosith/"
+    else
+        warn "No existe ~/.config/cryptosith/ (¿cryptosith no instalado?)"
+    fi
+
+    # --- Copiar foot.ini (opcional) ---
+    if [[ -f "$FOOT_INI_SRC" ]]; then
+        cp "$FOOT_INI_SRC" "$backup_path/foot.ini"
+        ok "Copiado: ~/.config/foot/foot.ini"
+    else
+        warn "No existe ~/.config/foot/foot.ini"
+    fi
+
+    # --- METADATA.txt ---
+    {
+        echo "Backup creado: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+        echo "Host: $(hostname)"
+        echo "Usuario: $(whoami)"
+        echo "Zsh version: $($SHELL -c 'echo $ZSH_VERSION' 2>/dev/null || echo 'N/A')"
+        echo "Sistema: $(uname -srm)"
+        echo ""
+        echo "Contenido:"
+        echo "  - zshenv         → ~/.zshenv"
+        echo "  - zsh/           → ~/.config/zsh/"
+        echo "  - cryptosith/    → ~/.config/cryptosith/"
+        echo "  - foot.ini       → ~/.config/foot/foot.ini"
+    } > "$backup_path/METADATA.txt"
+    ok "Generado: METADATA.txt"
+
+    # --- Verificar integridad ---
+    echo ""
+    info "Verificando integridad del backup..."
+    if [[ ! -f "$backup_path/zshenv" ]]; then
+        die "Falta zshenv en el backup"
+    fi
+    if [[ ! -d "$backup_path/zsh/functions" ]]; then
+        die "Falta zsh/functions/ en el backup"
+    fi
+    ok "Backup verificado"
+
+    # --- Resumen ---
+    echo ""
+    header "═══════════════════════════════════════════════════════"
+    header "               BACKUP COMPLETADO                       "
+    header "═══════════════════════════════════════════════════════"
+    echo ""
+    echo -e "  ${GREEN}Ruta:${NC} $backup_path"
+    echo -e "  ${GREEN}Tamaño:${NC} $(du -sh "$backup_path" | awk '{print $1}')"
+    echo -e "  ${GREEN}Fecha:${NC} $(date '+%Y-%m-%d %H:%M:%S')"
+    echo ""
+    echo -e "${YELLOW}⚠ IMPORTANTE:${NC}"
+    echo "  • El backup incluye el archivo .zshenv (crítico)."
+    echo "  • Para restaurar en otra PC: ./zsh-backup restore $backup_path"
+    echo ""
+}
+
+# ================================================================
+# MODO RESTAURAR
+# ================================================================
+restaurar_backup() {
+    local origen="${1:-}"
+
+    header "═══════════════════════════════════════════════════════"
+    header "         RESTAURACIÓN DE LA CONFIGURACIÓN DE ZSH       "
+    header "═══════════════════════════════════════════════════════"
+    echo ""
+
+    # Pedir ruta si no se pasó por argumento
+    if [[ -z "$origen" ]]; then
+        echo -e "${YELLOW}¿Dónde está el backup?${NC}"
+        echo "  Ejemplos:"
+        echo "    /run/media/usuario/USB/$BACKUP_DIR_NAME"
+        echo "    /mnt/disco-externo/salvas/$BACKUP_DIR_NAME"
+        echo "    $HOME/salvas/$BACKUP_DIR_NAME"
+        echo ""
+        read -rp "Ruta del backup: " origen
+    fi
+
+    origen="${origen%/}"
+
+    [[ -z "$origen" ]] && die "Ruta vacía"
+
+    # Si le pasaron el destino (ej: /mnt/usb/), probar a añadir ZSH-Backup
+    if [[ ! -d "$origen" ]]; then
+        die "No existe la ruta: $origen"
+    fi
+
+    # Si no es directamente el ZSH-Backup, intentar entrar
+    if [[ ! -f "$origen/zshenv" ]] && [[ -d "$origen/$BACKUP_DIR_NAME" ]]; then
+        origen="$origen/$BACKUP_DIR_NAME"
+        info "Detectado backup dentro de: $origen"
+    fi
+
+    # Verificar estructura mínima
+    [[ -f "$origen/zshenv" ]] || die "No se encuentra 'zshenv' en $origen"
+    [[ -d "$origen/zsh" ]]    || die "No se encuentra la carpeta 'zsh' en $origen"
+
+    # --- Aviso ---
+    echo ""
+    warn "Se van a SOBRESCRIBIR los siguientes archivos:"
+    echo "  • ~/.zshenv"
+    echo "  • ~/.config/zsh/"
+    [[ -d "$origen/cryptosith" ]] && echo "  • ~/.config/cryptosith/"
+    [[ -f "$origen/foot.ini" ]]   && echo "  • ~/.config/foot/foot.ini"
+    echo ""
+    confirmar "¿Continuar?" || die "Cancelado por el usuario"
+
+    # --- Backup del estado actual (por si acaso) ---
+    local timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+
+    if [[ -f "$ZSHENV_SRC" ]]; then
+        cp "$ZSHENV_SRC" "$ZSHENV_SRC.bak-$timestamp"
+        info "Backup del actual: ~/.zshenv.bak-$timestamp"
+    fi
+    if [[ -d "$ZSH_DIR_SRC" ]]; then
+        mv "$ZSH_DIR_SRC" "$ZSH_DIR_SRC.bak-$timestamp"
+        info "Backup del actual: ~/.config/zsh.bak-$timestamp"
+    fi
+
+    # --- Restaurar .zshenv ---
+    cp "$origen/zshenv" "$ZSHENV_SRC"
+    ok "Restaurado: ~/.zshenv"
+
+    # --- Restaurar ~/.config/zsh/ ---
+    mkdir -p "$HOME/.config"
+    cp -r "$origen/zsh" "$ZSH_DIR_SRC"
+    ok "Restaurado: ~/.config/zsh/"
+
+    # --- Restaurar cryptosith ---
+    if [[ -d "$origen/cryptosith" ]]; then
+        cp -r "$origen/cryptosith" "$CRYPTOSITH_DIR_SRC"
+        ok "Restaurado: ~/.config/cryptosith/"
+    fi
+
+    # --- Restaurar foot.ini ---
+    if [[ -f "$origen/foot.ini" ]]; then
+        mkdir -p "$HOME/.config/foot"
+        cp "$origen/foot.ini" "$FOOT_INI_SRC"
+        ok "Restaurado: ~/.config/foot/foot.ini"
+    fi
+
+    # --- Verificar ---
+    echo ""
+    info "Verificando restauración..."
+    [[ -f "$ZSHENV_SRC" ]] || die "Falta ~/.zshenv tras restaurar"
+    [[ -d "$ZSH_DIR_SRC/functions" ]] || die "Falta ~/.config/zsh/functions/"
+    [[ -f "$ZSH_DIR_SRC/.zshrc" ]] || die "Falta ~/.config/zsh/.zshrc"
+    ok "Restauración verificada"
+
+    # --- Resumen ---
+    echo ""
+    header "═══════════════════════════════════════════════════════"
+    header "             RESTAURACIÓN COMPLETADA                   "
+    header "═══════════════════════════════════════════════════════"
+    echo ""
+    echo -e "  ${GREEN}Origen:${NC}  $origen"
+    echo -e "  ${GREEN}Destino:${NC} ~/.zshenv + ~/.config/zsh/"
+    echo ""
+    echo -e "${YELLOW}⚠ SIGUIENTE PASO:${NC}"
+    echo "  Abre una terminal nueva o ejecuta:"
+    echo -e "    ${CYAN}exec zsh${NC}"
+    echo ""
+    echo "  Y verifica:"
+    echo -e "    ${CYAN}cryp help${NC}      # si usas cryptosith"
+    echo -e "    ${CYAN}menu${NC}           # menú central"
+    echo ""
+    echo "  Si algo falla, tienes backup del estado anterior en:"
+    echo -e "    ${CYAN}~/.zshenv.bak-$timestamp${NC}"
+    echo -e "    ${CYAN}~/.config/zsh.bak-$timestamp${NC}"
+    echo ""
+}
+
+# ================================================================
+# MENÚ PRINCIPAL
+# ================================================================
+mostrar_menu() {
+    clear
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════╗"
+    echo "║          🔐 ZSH-BACKUP — Gestor de configuración     ║"
+    echo "║              Respaldar / Restaurar                   ║"
+    echo "╚══════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo -e "  ${YELLOW}1${NC}  📦 Hacer backup de la configuración de Zsh"
+    echo -e "  ${YELLOW}2${NC}  🚀 Restaurar configuración desde un backup"
+    echo -e "  ${YELLOW}3${NC}  ℹ️  Información sobre el script"
+    echo -e "  ${YELLOW}0${NC}  🚪 Salir"
+    echo ""
+    echo -ne "${GREEN}👉 Opción [0-3]: ${NC}"
+}
+
+info_script() {
+    clear
+    echo -e "${BOLD}ZSH-BACKUP — Información${NC}"
+    echo ""
+    echo "Este script respalda y restaura tu configuración modular de Zsh."
+    echo ""
+    echo -e "${CYAN}Qué respalda:${NC}"
+    echo "  • ~/.zshenv                    (bootstrap ZDOTDIR, crítico)"
+    echo "  • ~/.config/zsh/               (configuración completa)"
+    echo "  • ~/.config/cryptosith/        (manual de cryptosith)"
+    echo "  • ~/.config/foot/foot.ini      (config de la terminal)"
+    echo ""
+    echo -e "${CYAN}Estructura del backup:${NC}"
+    echo "  ZSH-Backup/"
+    echo "  ├── zshenv"
+    echo "  ├── zsh/"
+    echo "  ├── cryptosith/"
+    echo "  ├── foot.ini"
+    echo "  └── METADATA.txt"
+    echo ""
+    echo -e "${CYAN}Uso desde terminal:${NC}"
+    echo "  zsh-backup                    # este menú"
+    echo "  zsh-backup backup /mnt/usb    # backup directo"
+    echo "  zsh-backup restore /mnt/usb/ZSH-Backup  # restore directo"
+    echo ""
+    echo -e "${CYAN}Al restaurar:${NC}"
+    echo "  • Guarda backup del estado actual en .bak-TIMESTAMP"
+    echo "  • Restaura .zshenv y ~/.config/zsh/"
+    echo "  • Verifica integridad"
+    echo "  • Te recuerda ejecutar 'exec zsh'"
+    echo ""
+}
+
+menu_principal() {
+    while true; do
+        mostrar_menu
+        read -r opcion
+        echo ""
+
+        case "$opcion" in
+            1)
+                hacer_backup
+                pausa
+                ;;
+            2)
+                restaurar_backup
+                pausa
+                ;;
+            3)
+                info_script
+                pausa
+                ;;
+            0)
+                echo -e "${GREEN}👋 Saliendo. ¡Hasta luego!${NC}"
+                return 0
+                ;;
+            *)
+                echo -e "${RED}✗ Opción inválida.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
+# ================================================================
+# PUNTO DE ENTRADA
+# ================================================================
+case "${1:-}" in
+    backup)
+        hacer_backup "${2:-}"
+        ;;
+    restore)
+        restaurar_backup "${2:-}"
+        ;;
+    ""|menu)
+        menu_principal
+        ;;
+    -h|--help|help)
+        echo "Uso: zsh-backup [backup|restore] [ruta]"
+        echo ""
+        echo "  zsh-backup                     Menú interactivo"
+        echo "  zsh-backup backup [ruta]       Backup directo"
+        echo "  zsh-backup restore [ruta]      Restaurar directo"
+        echo "  zsh-backup help                Esta ayuda"
+        ;;
+    *)
+        die "Comando desconocido: $1. Usa 'zsh-backup help'."
+        ;;
+esac

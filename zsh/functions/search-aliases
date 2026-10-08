@@ -1,0 +1,26 @@
+# search-aliases
+# ================================================================
+# Busca aliases por palabra clave en todos los archivos de
+# aliases.d/.
+#
+# Uso:  search-aliases <palabra>
+# Ej:   search-aliases git
+#       search-aliases pacman
+#       search-aliases mount
+#
+# Alias corto: ba (definido en ~/.config/zsh/.zshrc)
+# ================================================================
+
+search-aliases() {
+    if [[ $# -eq 0 ]]; then
+        echo "Uso: search-aliases <palabra-clave>"
+        return 1
+    fi
+
+    # Busca líneas que empiecen por "alias" (con espacios opcionales)
+    # en todos los archivos de aliases.d/ y filtra por la palabra.
+    grep -n -E '^[[:space:]]*alias ' \
+        "$ZDOTDIR"/conf.d/aliases.d/*.sh \
+        | grep -i --color=always "$1" \
+        | sed -e 's|^.*/aliases.d/||' -e 's/^[[:space:]]*alias //'
+}

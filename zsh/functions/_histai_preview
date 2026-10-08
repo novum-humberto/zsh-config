@@ -1,0 +1,51 @@
+# _histai_preview
+# ================================================================
+# Función auxiliar para HistAI_Preview.
+#
+# Analiza un comando del historial, extrae la ruta de archivo o
+# directorio si existe, y muestra una vista previa:
+#   - Archivo  → bat (con números de línea) o cat
+#   - Directorio → lsd -la o ls -la
+#   - Sin ruta → muestra el comando tal cual
+#
+# Uso:  _histai_preview "<comando>"
+#
+# Es llamada desde el --preview de HistAI_Preview con:
+#   zsh -ic '_histai_preview {}' 2>/dev/null
+#
+# El guion bajo al principio indica que es una función auxiliar
+# (no pensada para invocarse directamente por el usuario).
+# ================================================================
+
+_histai_preview() {
+    local cmd="$1"
+
+    # Extraer la primera ruta que aparezca en el comando.
+    # Busca: /ruta, ~/ruta, o ./ruta
+    local ruta
+    ruta=$(echo "$cmd" | grep -oE '(/[^[:space:]]+|~[^[:space:]]+|\./[^[:space:]]+)' | head -n1 | xargs 2>/dev/null)
+
+    # Si no hay ruta, mostrar solo el comando.
+    if [[ -z "$ruta" ]]; then
+        echo "Comando: $cmd"
+        return 0
+    fi
+
+    # Expandir ~ al $HOME real.
+    ruta="${ruta/#\~/$HOME}"
+
+    if [[ -f "$ruta" ]]; then
+        # Es un archivo: mostrar con bat (o cat si bat falla).
+        bat --style=numbers --color=always --theme="Dracula" "$ruta" 2>/dev/null \
+            || cat "$ruta" 2>/dev/null
+    elif [[ -d "$ruta" ]]; then
+        # Es un directorio: listar contenido.
+        lsd -la --color=always "$ruta" 2>/dev/null | head -n 20 \
+            || ls -la "$ruta" 2>/dev/null | head -n 20
+    else
+        # La ruta no existe.
+        echo "Comando: $cmd"
+        echo ""
+        echo "Ruta no encontrada: $ruta"
+    fi
+}

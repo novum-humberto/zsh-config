@@ -1,0 +1,127 @@
+# bc-calc
+# ================================================================
+# Calculadora interactiva basada en `bc`.
+#
+# Menú con 8 operaciones comunes (suma, resta, multiplicación,
+# división, potencia, raíz, módulo, combinada) + ayuda de sintaxis.
+#
+# Uso:  bc-calc
+#
+# La salida se colorea según la operación.
+# ================================================================
+
+bc-calc() {
+    local opcion=""
+    local oper=""
+    local result=""
+
+    while true; do
+        clear
+        echo ""
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║              BC - Calculadora interactiva            ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo ""
+        echo "IMPORTANTE:"
+        echo "  - Dentro del menú: escribe la operación SIN comillas."
+        echo "  - Ej: 5+7   sqrt(25)   scale=3; 10/4"
+        echo "  - Fuera del menú: usa la sintaxis completa → echo \"5+7\" | bc"
+        echo ""
+        echo "=== Menú de Operaciones con bc ==="
+        echo "1) Suma"
+        echo "2) Resta"
+        echo "3) Multiplicación"
+        echo "4) División"
+        echo "5) Potencia"
+        echo "6) Raíz cuadrada"
+        echo "7) Módulo (resto)"
+        echo "8) Combinación (ejemplo: scale=3; (2+3)/sqrt(4))"
+        echo "9) Sintaxis rápida (lista de operadores)"
+        echo "0) Salir"
+        echo "=================================="
+
+        echo -n "Seleccione una opción: "
+        read opcion
+
+        case "$opcion" in
+            1)
+                echo "Ejemplo fuera del menú: echo \"2+2\" | bc → 4"
+                echo -n "Ingrese su operación de suma (ej: 5+7): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{green}$result%f"
+                ;;
+            2)
+                echo "Ejemplo fuera del menú: echo \"10-3\" | bc → 7"
+                echo -n "Ingrese su operación de resta (ej: 20-8): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{red}$result%f"
+                ;;
+            3)
+                echo "Ejemplo fuera del menú: echo \"5*4\" | bc → 20"
+                echo -n "Ingrese su operación de multiplicación (ej: 6*9): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{blue}$result%f"
+                ;;
+            4)
+                echo "Ejemplo fuera del menú: echo \"scale=2; 20/3\" | bc → 6.66"
+                echo -n "Ingrese su operación de división (ej: scale=3; 10/4): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{yellow}$result%f"
+                ;;
+            5)
+                echo "Ejemplo fuera del menú: echo \"2^5\" | bc → 32"
+                echo -n "Ingrese su operación de potencia (ej: 3^4): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{magenta}$result%f"
+                ;;
+            6)
+                echo "Ejemplo fuera del menú: echo \"sqrt(16)\" | bc → 4"
+                echo -n "Ingrese su operación de raíz [ej: sqrt(25)]: "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{cyan}$result%f"
+                ;;
+            7)
+                echo "Ejemplo fuera del menú: echo \"10%3\" | bc → 1"
+                echo -n "Ingrese su operación de módulo (ej: 17%5): "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{bright cyan}$result%f"
+                ;;
+            8)
+                echo "Ejemplo fuera del menú: echo \"scale=3; (2+3)/sqrt(4)\" | bc → 2.50"
+                echo -n "Ingrese su operación combinada: "
+                read oper
+                result=$(echo "$oper" | bc)
+                print -P "Resultado: %F{yellow}$result%f"
+                ;;
+            9)
+                echo "=== Sintaxis rápida de operadores en bc ==="
+                echo "+       → suma"
+                echo "-       → resta"
+                echo "*       → multiplicación"
+                echo "/       → división"
+                echo "%       → módulo (resto)"
+                echo "^       → potencia"
+                echo "sqrt(x) → raíz cuadrada"
+                echo "scale=N → precisión decimal (ej: scale=3)"
+                ;;
+            0)
+                echo "Saliendo de bc-calc..."
+                break
+                ;;
+            *)
+                echo "Opción inválida, intente de nuevo."
+                ;;
+        esac
+
+        echo ""
+        echo -n "Presione [Enter] para continuar..."
+        read
+    done
+}

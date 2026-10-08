@@ -1,0 +1,59 @@
+# HistAI_Preview
+# ================================================================
+# Igual que HistAI pero con vista previa del archivo objetivo.
+#
+# Analiza el comando seleccionado con fzf, extrae la ruta de archivo
+# o directorio, y muestra una previsualización (contenido del archivo
+# o listado del directorio).
+#
+# Atajos dentro de fzf:
+#   Enter  → poner el comando en la línea
+#   Ctrl+E → editar el comando en nvim antes de ejecutarlo
+#   Ctrl+X → ejecutar el comando directamente
+#   Ctrl+Y → copiar el comando al portapapeles
+#   Esc    → cancelar
+#
+# Atajo: Alt+P (bindkey '^[p' en 50-keybindings.zsh)
+#
+# NOTA: es un widget de zle. Modifica $LBUFFER.
+# ================================================================
+
+HistAI_Preview() {
+    local comando_actual="$LBUFFER"
+
+    # Mismo historial único que HistAI (últimos 20).
+    local historial
+    historial=$(fc -l 1 2>/dev/null \
+        | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' \
+        | grep -v '^$' \
+        | tac \
+        | awk '!seen[$0]++' \
+        | head -n 20)
+
+    # Comando fzf con preview.
+    local fzf_cmd=(
+        fzf
+        --no-sort
+        --reverse
+        --prompt="HistAI+Preview [E:edit X:exec Y:copy] > "
+        --height=40%
+        --bind='up:up,down:down'
+        --bind='ctrl-d:down,ctrl-u:up'
+        --bind='ctrl-e:execute(tmp=$(mktemp --suffix=.sh) && echo {} > "$tmp" && nvim "$tmp" && cat "$tmp" | wl-copy && rm "$tmp")'
+        --bind='ctrl-x:execute-silent(echo {} | zsh)'
+        --bind='ctrl-y:execute-silent(echo {} | wl-copy)+abort'
+        --color='hl:196,hl+:196,pointer:099,marker:099'
+        --preview="zsh -ic '_histai_preview {}' 2>/dev/null"
+        --preview-window=down:40%:border-rounded
+    )
+
+    [[ -n "$comando_actual" ]] && fzf_cmd+=(--query="$comando_actual")
+
+    local seleccion
+    seleccion=$(printf '%s\n' "$historial" | "${fzf_cmd[@]}")
+
+    if [[ -n "$seleccion" ]]; then
+        LBUFFER="$seleccion"
+        zle redisplay
+    fi
+}

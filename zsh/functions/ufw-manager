@@ -1,0 +1,383 @@
+# ufw-manager
+# ================================================================
+# Gestor interactivo de UFW (Uncomplicated Firewall).
+#
+# Menú con 11 opciones: ver estado, activar/desactivar, añadir y
+# eliminar reglas, resetear, cambiar políticas por defecto, logging,
+# perfiles de aplicación, diagnóstico y ayuda.
+#
+# Uso:  ufw-manager
+# Alias: ufw-menu (en 95-func-shortcuts.sh)
+#
+# Requisitos: paquete ufw instalado.
+# ================================================================
+
+ufw-manager() {
+    # --- Colores ---
+    local -r RED='\033[0;31m'
+    local -r GREEN='\033[0;32m'
+    local -r YELLOW='\033[1;33m'
+    local -r BLUE='\033[0;34m'
+    local -r PURPLE='\033[0;35m'
+    local -r CYAN='\033[0;36m'
+    local -r NC='\033[0m'
+
+    # --- Verificar que UFW está instalado ---
+    if ! command -v ufw &>/dev/null; then
+        echo -e "${RED}✗ UFW no está instalado.${NC}"
+        echo -e "${YELLOW}  Instalar con:${NC}"
+        echo -e "${CYAN}    sudo pacman -S ufw     (Arch/Omarchy)${NC}"
+        echo -e "${CYAN}    sudo apt install ufw   (Debian/Ubuntu)${NC}"
+        echo -e "${CYAN}    sudo dnf install ufw   (Fedora)${NC}"
+        return 1
+    fi
+
+    # ================================================================
+    # AUXILIAR: ejecutar comando ufw mostrando qué hace
+    # ================================================================
+    _run_ufw() {
+        local cmd_desc="$1"
+        shift
+        echo -e "${CYAN}⚙  Comando:${NC} ${YELLOW}sudo ufw $*${NC}"
+        echo -e "${BLUE}ℹ  ${cmd_desc}${NC}"
+        sudo ufw "$@"
+        echo ""
+    }
+
+    # ================================================================
+    # MENÚ PRINCIPAL
+    # ================================================================
+    while true; do
+        clear
+        echo -e "${GREEN}"
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║             UFW FIREWALL MANAGER                     ║"
+        echo "║       Gestión interactiva y didáctica                ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}Selecciona una opción:${NC}"
+        echo -e "  ${YELLOW}1${NC}  📋 Ver estado (status verbose)"
+        echo -e "  ${YELLOW}2${NC}  🔛 Activar / Desactivar firewall"
+        echo -e "  ${YELLOW}3${NC}  ➕ Añadir regla (allow/deny)"
+        echo -e "  ${YELLOW}4${NC}  ➖ Eliminar regla"
+        echo -e "  ${YELLOW}5${NC}  📜 Listar reglas numeradas"
+        echo -e "  ${YELLOW}6${NC}  🧹 Resetear firewall (borra todo)"
+        echo -e "  ${YELLOW}7${NC}  🎛️  Cambiar política por defecto"
+        echo -e "  ${YELLOW}8${NC}  📝 Activar/desactivar logging"
+        echo -e "  ${YELLOW}9${NC}  📦 Perfiles de aplicación (app list)"
+        echo -e "  ${YELLOW}10${NC} 🔍 Puertos en escucha + reglas"
+        echo -e "  ${YELLOW}11${NC} 📚 Ayuda completa (con ejemplos)"
+        echo -e "  ${YELLOW}0${NC}  🚪 Salir"
+        echo ""
+        echo -ne "${GREEN}👉 Opción [0-11]: ${NC}"
+        read -r choice
+
+        case $choice in
+            1)
+                _run_ufw "Muestra el estado detallado del firewall." status verbose
+                ;;
+            2)
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Activar/Desactivar firewall ---${NC}"
+                    echo -e "  ${GREEN}1) Activar (enable)${NC}"
+                    echo -e "  ${RED}2) Desactivar (disable)${NC}"
+                    echo -e "  ${CYAN}0) Volver al menú principal${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r sub
+                    case $sub in
+                        0) break ;;
+                        1)
+                            echo -e "${RED}⚠  Activar puede bloquear conexiones entrantes.${NC}"
+                            echo -ne "${YELLOW}¿Confirmas? (s/N): ${NC}"
+                            read -r confirm
+                            if [[ "$confirm" =~ ^[sS]$ ]]; then
+                                _run_ufw "Activando el firewall." enable
+                            else
+                                echo -e "${GREEN}Cancelado.${NC}"
+                            fi
+                            break
+                            ;;
+                        2)
+                            echo -e "${RED}⚠  Desactivar deja el sistema expuesto.${NC}"
+                            echo -ne "${YELLOW}¿Confirmas? (s/N): ${NC}"
+                            read -r confirm
+                            if [[ "$confirm" =~ ^[sS]$ ]]; then
+                                _run_ufw "Desactivando el firewall." disable
+                            else
+                                echo -e "${GREEN}Cancelado.${NC}"
+                            fi
+                            break
+                            ;;
+                        *)
+                            echo -e "${RED}Opción inválida.${NC}"
+                            ;;
+                    esac
+                done
+                ;;
+            3)
+                # --- Añadir regla ---
+                local action=""
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Elegir acción ---${NC}"
+                    echo -e "  ${GREEN}1) allow (permitir)${NC}"
+                    echo -e "  ${RED}2) deny (denegar)${NC}"
+                    echo -e "  ${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r action_choice
+                    case $action_choice in
+                        0) break ;;
+                        1) action="allow"; break ;;
+                        2) action="deny"; break ;;
+                        *) echo -e "${RED}Opción no válida.${NC}" ;;
+                    esac
+                done
+                [[ "$action_choice" == "0" ]] && continue
+
+                echo -ne "${YELLOW}Puerto o servicio (ej: 80, ssh, http): ${NC}"
+                read -r port_service
+                [[ -z "$port_service" ]] && { echo -e "${RED}✗ Necesitas especificar puerto/servicio.${NC}"; sleep 1; continue; }
+
+                local proto=""
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Protocolo ---${NC}"
+                    echo -e "  ${GREEN}1) TCP  (fiable, web, SSH)${NC}"
+                    echo -e "  ${GREEN}2) UDP  (rápido, DNS, streaming)${NC}"
+                    echo -e "  ${GREEN}3) Ambos${NC}"
+                    echo -e "  ${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-3]: ${NC}"
+                    read -r proto_choice
+                    case $proto_choice in
+                        0) break ;;
+                        1) proto="tcp"; break ;;
+                        2) proto="udp"; break ;;
+                        3) proto=""; break ;;
+                        *) echo -e "${RED}Inválida.${NC}" ;;
+                    esac
+                done
+                [[ "$proto_choice" == "0" ]] && continue
+
+                echo -ne "${YELLOW}Dirección de origen (opcional, Enter = any):\n  ej: from 192.168.1.0/24 ${NC}"
+                read -r direction_from
+                local direction=""
+                [[ -n "$direction_from" ]] && direction="from $direction_from"
+
+                local cmd_parts="$action $port_service"
+                [[ -n "$proto" ]] && cmd_parts="$cmd_parts/$proto"
+                [[ -n "$direction" ]] && cmd_parts="$direction $cmd_parts"
+                _run_ufw "Añadiendo regla." $cmd_parts
+                ;;
+            4)
+                # --- Eliminar regla ---
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Eliminar regla ---${NC}"
+                    echo -e "  ${GREEN}1) Por número (muestra lista)${NC}"
+                    echo -e "  ${GREEN}2) Por especificación (ej: allow 80/tcp)${NC}"
+                    echo -e "  ${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r del_choice
+                    case $del_choice in
+                        0) break ;;
+                        1)
+                            echo -e "${CYAN}Lista de reglas:${NC}"
+                            sudo ufw status numbered
+                            echo ""
+                            echo -ne "${YELLOW}Número(s) a eliminar (ej: 1,3): ${NC}"
+                            read -r num
+                            [[ -z "$num" ]] && continue
+                            _run_ufw "Eliminando regla(s) número $num." delete $num
+                            break
+                            ;;
+                        2)
+                            echo -ne "${YELLOW}Especificación exacta (ej: allow 80/tcp): ${NC}"
+                            read -r rule
+                            [[ -z "$rule" ]] && continue
+                            _run_ufw "Eliminando regla: ${rule}." delete $rule
+                            break
+                            ;;
+                        *) echo -e "${RED}Inválida.${NC}" ;;
+                    esac
+                done
+                ;;
+            5)
+                _run_ufw "Mostrando reglas numeradas." status numbered
+                ;;
+            6)
+                echo -e "${RED}⚠  PERDERÁS TODAS LAS REGLAS Y EL FIREWALL SE DESACTIVARÁ.${NC}"
+                echo -ne "${YELLOW}Escribe 'RESET' para confirmar: ${NC}"
+                read -r confirm
+                if [[ "$confirm" == "RESET" ]]; then
+                    _run_ufw "Reseteando UFW (elimina todas las reglas y desactiva)." reset
+                else
+                    echo -e "${GREEN}Reset cancelado.${NC}"
+                fi
+                ;;
+            7)
+                # --- Políticas por defecto ---
+                local def_in=""
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Política por defecto (incoming) ---${NC}"
+                    echo -e "  ${GREEN}1) deny  (recomendado)${NC}"
+                    echo -e "  ${RED}2) allow (inseguro)${NC}"
+                    echo -e "  ${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r def_in
+                    case $def_in in
+                        0) break ;;
+                        1) _run_ufw "Incoming → deny." default deny incoming; break ;;
+                        2) _run_ufw "Incoming → allow." default allow incoming; break ;;
+                        *) echo -e "${RED}Inválida.${NC}" ;;
+                    esac
+                done
+                [[ "$def_in" == "0" ]] && continue
+
+                local def_out=""
+                while true; do
+                    echo ""
+                    echo -e "${YELLOW}--- Política por defecto (outgoing) ---${NC}"
+                    echo -e "  ${GREEN}1) allow (normal)${NC}"
+                    echo -e "  ${RED}2) deny  (muy restrictivo)${NC}"
+                    echo -e "  ${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r def_out
+                    case $def_out in
+                        0) break ;;
+                        1) _run_ufw "Outgoing → allow." default allow outgoing; break ;;
+                        2) _run_ufw "Outgoing → deny." default deny outgoing; break ;;
+                        *) echo -e "${RED}Inválida.${NC}" ;;
+                    esac
+                done
+                ;;
+            8)
+                # --- Logging ---
+                echo -e "${YELLOW}Estado actual del logging:${NC}"
+                sudo ufw status verbose | grep "Logging"
+                echo ""
+                while true; do
+                    echo -e "${GREEN}1) Activar logging (on)${NC}"
+                    echo -e "${RED}2) Desactivar logging (off)${NC}"
+                    echo -e "${CYAN}0) Volver${NC}"
+                    echo -ne "${GREEN}Elige [0-2]: ${NC}"
+                    read -r log_choice
+                    case $log_choice in
+                        0) break ;;
+                        1) _run_ufw "Activando logging." logging on; break ;;
+                        2) _run_ufw "Desactivando logging." logging off; break ;;
+                        *) echo -e "${RED}Inválida.${NC}" ;;
+                    esac
+                done
+                ;;
+            9)
+                _run_ufw "Lista de perfiles de aplicación disponibles." app list
+                ;;
+            10)
+                echo -e "${BLUE}=== Puertos en escucha (ss -tuln) ===${NC}"
+                sudo ss -tuln | column -t
+                echo ""
+                echo -e "${BLUE}=== Reglas UFW actuales ===${NC}"
+                sudo ufw status verbose
+                ;;
+            11)
+                clear
+                echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+                echo -e "${YELLOW}            📚  GUÍA COMPLETA DE COMANDOS UFW  📚${NC}"
+                echo -e "${YELLOW}                     (con ejemplos)${NC}"
+                echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+                echo -e "${GREEN}🔰 ACCIONES BÁSICAS 🔰${NC}\n"
+
+                echo -e " ${YELLOW}1) Ver estado:${NC}     sudo ufw status verbose"
+                echo -e "    Muestra reglas activas, política por defecto y logging."
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw status verbose"
+
+                echo -e "\n ${YELLOW}2) Encender/Apagar:${NC}"
+                echo -e "    Encender:        sudo ufw enable"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw enable"
+                echo -e "    Apagar:          sudo ufw disable"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw disable"
+
+                echo -e "\n ${YELLOW}3) Añadir regla:${NC}"
+                echo -e "    Permitir tráfico TCP a puerto 80:"
+                echo -e "    sudo ufw allow 80/tcp"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw allow 80/tcp"
+                echo -e "    Denegar tráfico UDP al puerto 53:"
+                echo -e "    sudo ufw deny 53/udp"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw deny 53/udp"
+                echo -e "    Permitir desde una subred:"
+                echo -e "    sudo ufw allow from 192.168.1.0/24 to any port 22"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw allow from 192.168.1.0/24 to any port 22"
+
+                echo -e "\n ${YELLOW}4) Eliminar regla:${NC}"
+                echo -e "    Por número:         sudo ufw delete 3"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw delete 3"
+                echo -e "    Por especificación: sudo ufw delete allow 80/tcp"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw delete allow 80/tcp"
+
+                echo -e "\n ${YELLOW}5) Listar reglas:${NC}  sudo ufw status numbered"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw status numbered"
+
+                echo -e "\n ${YELLOW}6) Resetear:${NC}       sudo ufw reset"
+                echo -e "    (Elimina todas las reglas y desactiva)"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw reset"
+
+                echo -e "\n ${YELLOW}7) Política por defecto:${NC}"
+                echo -e "    Rechazar todo el tráfico entrante:"
+                echo -e "    sudo ufw default deny incoming"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw default deny incoming"
+                echo -e "    Permitir todo el tráfico saliente:"
+                echo -e "    sudo ufw default allow outgoing"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw default allow outgoing"
+
+                echo -e "\n ${YELLOW}8) Logging:${NC}"
+                echo -e "    Activar:         sudo ufw logging on"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw logging on"
+                echo -e "    Desactivar:      sudo ufw logging off"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw logging off"
+
+                echo -e "\n ${YELLOW}9) Perfiles de aplicación:${NC}"
+                echo -e "    Listar:          sudo ufw app list"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw app list"
+                echo -e "    Info de un perfil: sudo ufw app info OpenSSH"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw app info OpenSSH"
+                echo -e "    Permitir un perfil: sudo ufw allow OpenSSH"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw allow OpenSSH"
+
+                echo -e "\n ${YELLOW}10) Diagnóstico:${NC}"
+                echo -e "    Ver puertos en escucha: sudo ss -tuln"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ss -tuln"
+                echo -e "    Ver reglas actuales: sudo ufw status verbose"
+                echo -e "    ${GREEN}Ejemplo:${NC} sudo ufw status verbose"
+
+                echo -e "\n${CYAN}────────────────────────────────────────────────────────${NC}"
+                echo -e "${GREEN}📌 DIFERENCIA TCP vs UDP:${NC}"
+                echo -e "  ${YELLOW}TCP${NC}: Orientado a conexión, fiable (web, SSH, correo)."
+                echo -e "  ${YELLOW}UDP${NC}: Sin conexión, rápido (DNS, streaming, juegos)."
+                echo -e "\n${GREEN}📌 SINTAXIS AVANZADA:${NC}"
+                echo "  sudo ufw limit ssh/tcp          # Protección anti fuerza bruta"
+                echo "  sudo ufw allow in on eth0 to any port 80"
+                echo "  sudo ufw show added             # Reglas pendientes de aplicar"
+                echo -e "\n${GREEN}📌 CONSEJOS:${NC}"
+                echo "  - Antes de activar, permite SSH si accedes remotamente."
+                echo "  - Usa 'ufw status numbered' para ver números y eliminar fácilmente."
+                echo "  - La política 'deny incoming' + 'allow outgoing' es segura y común."
+                echo -e "${CYAN}════════════════════════════════════════════════════════${NC}"
+                ;;
+            0)
+                echo -e "${GREEN}👋 Saliendo del gestor UFW.${NC}"
+                break
+                ;;
+            *)
+                echo -e "${RED}✗ Opción inválida.${NC}"
+                ;;
+        esac
+
+        if [[ $choice != 0 ]]; then
+            echo ""
+            echo -ne "${CYAN}Presiona Enter para continuar...${NC}"
+            read -r
+        fi
+    done
+}

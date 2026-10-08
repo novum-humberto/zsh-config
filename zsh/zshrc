@@ -1,0 +1,26 @@
+# ~/.config/zsh/.zshrc
+# ================================================================
+# Orquestador. No poner lógica aquí, solo carga fragmentos.
+# El orden importa: los números (00, 10, 20...) definen la secuencia.
+# ================================================================
+
+# 1. Añadir nuestra carpeta de funciones al fpath de Zsh.
+#    DEBE IR ANTES DE CUALQUIER compinit, para que el sistema de
+#    completado encuentre nuestros archivos _comando (ej: _cryptosith).
+fpath=("$ZDOTDIR/functions" $fpath)
+
+# 2. Cargar fragmentos de configuración en orden alfabético/numérico.
+#    El glob [0-9][0-9]-*.zsh captura todos los archivos tipo "00-algo.zsh".
+#    El modificador (N) significa "nullglob": si no encuentra archivos,
+#    no falla (en vez de intentar leer un nombre de archivo literal).
+for f in "$ZDOTDIR"/conf.d/[0-9][0-9]-*.zsh(N); do
+    source "$f"
+done
+
+# 3. Registrar funciones para autoload (carga diferida).
+#    Zsh NO las lee hasta que las invocas. Arranque más rápido.
+autoload -Uz \
+    mantenimiento cryptosith bc-calc zellij-layout \
+    ufw-manager clamav-virus menu-principal search-aliases \
+    HistAI HistAI_Preview _histai_preview nano-script \
+    _cryptosith

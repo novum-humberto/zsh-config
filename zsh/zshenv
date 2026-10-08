@@ -1,0 +1,12 @@
+# ~/.zshenv
+# ================================================================
+# INTERRUPTOR: decide qué configuración de Zsh se carga.
+#
+#   COMENTADO   → usa ~/.zshrc  (tu config de años, la actual)
+#   DESCOMENTADO → usa ~/.config/zsh/.zshrc (la nueva modular)
+#
+# Para alternar, comenta/descomenta la línea de export ZDOTDIR
+# y abre una terminal nueva (o ejecuta: exec zsh)
+# ================================================================
+
+export ZDOTDIR="$HOME/.config/zsh"

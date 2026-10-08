@@ -1,0 +1,537 @@
+# mantenimiento
+# ================================================================
+# Super mantenimiento del sistema.
+#
+# Menú interactivo con 8 tareas + submenú de Omarchy.
+# Al terminar cada batch de tareas, vuelve al menú principal hasta
+# que el usuario elija 'q' o pulse Enter vacío.
+#
+# Los logs se guardan en ~/Vault/Logs/mantenimiento_FECHA.log
+# Se conservan los 10 más recientes.
+#
+# Uso:  mantenimiento
+# Alias: supermant, mantenimiento-avanzado (en 95-func-shortcuts.sh)
+# ================================================================
+
+mantenimiento() {
+    # --- Configuración ---
+    local -r log_dir="$HOME/Vault/Logs"
+    local log_file=""                                  # se asigna en cada batch
+    local -r usuario_actual="$(whoami)"
+    local -r max_logs=10
+
+    # --- Colores ---
+    local -r RED='\033[0;31m'
+    local -r GREEN='\033[0;32m'
+    local -r YELLOW='\033[1;33m'
+    local -r BLUE='\033[0;34m'
+    local -r PURPLE='\033[0;35m'
+    local -r CYAN='\033[0;36m'
+    local -r NC='\033[0m'
+
+    # ================================================================
+    # FUNCIONES INTERNAS
+    # ================================================================
+
+    optimizar_ssd() {
+        echo -e "${BLUE}[TAREA 1] Optimizar SSD (fstrim)...${NC}"
+        echo "[TAREA 1] Optimizar SSD (fstrim)..." >> "$log_file"
+        if command -v fstrim &> /dev/null; then
+            echo -e "${CYAN}→ Ejecutando: sudo fstrim -av${NC}" | tee -a "$log_file"
+            if sudo fstrim -av 2>&1 | tee -a "$log_file"; then
+                echo -e "${GREEN}✓ fstrim completado${NC}"
+                echo "✓ fstrim completado" >> "$log_file"
+            else
+                echo -e "${RED}✗ Error en fstrim${NC}"
+                echo "✗ Error en fstrim" >> "$log_file"
+                return 1
+            fi
+        else
+            echo -e "${YELLOW}⚠ fstrim no disponible, saltando...${NC}"
+            echo "⚠ fstrim no disponible, saltando..." >> "$log_file"
+        fi
+    }
+
+    limpiar_temporales() {
+        echo -e "${BLUE}[TAREA 2] Limpiar archivos temporales...${NC}"
+        echo "[TAREA 2] Limpiar archivos temporales..." >> "$log_file"
+        local temp_dirs=("/tmp" "/var/tmp" "$HOME/.cache")
+        for dir in "${temp_dirs[@]}"; do
+            if [[ -d "$dir" ]]; then
+                echo -e "${CYAN}→ Ejecutando: sudo find $dir -type f -atime +7 -delete${NC}" | tee -a "$log_file"
+                sudo find "$dir" -type f -atime +7 -delete 2>&1 | tee -a "$log_file"
+            fi
+        done
+        echo -e "${GREEN}✓ Limpieza de temporales completada${NC}"
+        echo "✓ Limpieza de temporales completada" >> "$log_file"
+    }
+
+    actualizar_sistema_completo() {
+        echo -e "${BLUE}[TAREA 3] Actualización completa del sistema...${NC}"
+        echo "[TAREA 3] Actualización completa del sistema..." >> "$log_file"
+        local comando_actualizacion=""
+        local tipo_comando=""
+        if command -v yay &> /dev/null; then
+            comando_actualizacion="yay -Syu"
+            tipo_comando="YAY (repositorios oficiales + AUR)"
+            echo -e "${CYAN}→ Ejecutando: $comando_actualizacion${NC}" | tee -a "$log_file"
+        elif command -v pacman &> /dev/null; then
+            comando_actualizacion="sudo pacman -Syu"
+            tipo_comando="PACMAN (solo repositorios oficiales)"
+            echo -e "${CYAN}→ Ejecutando: $comando_actualizacion${NC}" | tee -a "$log_file"
+        else
+            echo -e "${RED}✗ Error: no se encontró gestor de paquetes${NC}" | tee -a "$log_file"
+            return 1
+        fi
+        if script -qec "$comando_actualizacion" /dev/null 2>&1 | tee -a "$log_file"; then
+            local resultado_cmd=${PIPESTATUS[0]}
+            if [[ $resultado_cmd -eq 0 ]]; then
+                echo -e "${GREEN}✓ Actualización con $tipo_comando completada${NC}" | tee -a "$log_file"
+            else
+                echo -e "${YELLOW}⚠ Actualización completada con código: $resultado_cmd${NC}" | tee -a "$log_file"
+                return $resultado_cmd
+            fi
+        else
+            local resultado_cmd=${PIPESTATUS[0]}
+            echo -e "${RED}✗ Error durante la actualización (código: $resultado_cmd)${NC}" | tee -a "$log_file"
+            return $resultado_cmd
+        fi
+    }
+
+    limpiar_logs_antiguos() {
+        echo -e "${BLUE}[TAREA 4] Limpiar logs del sistema antiguos...${NC}"
+        echo "[TAREA 4] Limpiar logs del sistema antiguos..." >> "$log_file"
+        if [[ -d "/var/log" ]]; then
+            echo -e "${CYAN}→ Borrando logs con más de 30 días...${NC}" | tee -a "$log_file"
+            sudo find "/var/log" -name "*.log.*" -type f -mtime +30 -delete 2>&1 | tee -a "$log_file"
+            sudo find "/var/log" -name "*.log-*" -type f -mtime +30 -delete 2>&1 | tee -a "$log_file"
+        fi
+        if command -v logrotate &> /dev/null; then
+            echo -e "${CYAN}→ Forzando logrotate...${NC}" | tee -a "$log_file"
+            sudo logrotate -f /etc/logrotate.conf 2>&1 | tee -a "$log_file"
+        fi
+        echo -e "${GREEN}✓ Limpieza de logs antiguos completada${NC}"
+        echo "✓ Limpieza de logs antiguos completada" >> "$log_file"
+    }
+
+    analizar_espacio() {
+        echo -e "${BLUE}[TAREA 5] Analizar espacio en disco...${NC}"
+        echo "[TAREA 5] Analizar espacio en disco..." >> "$log_file"
+        echo "=== ESPACIO EN DISCO ===" | tee -a "$log_file"
+        /usr/bin/df -h 2>&1 | tee -a "$log_file"
+        echo "" | tee -a "$log_file"
+        echo "=== DIRECTORIOS MÁS GRANDES EN \$HOME ===" | tee -a "$log_file"
+        {
+            /usr/bin/du -sh "$HOME"/* 2>/dev/null
+            /usr/bin/du -sh "$HOME"/.* 2>/dev/null | grep -v '/\.$' | grep -v '/\.\.$'
+        } | /usr/bin/sort -hr 2>/dev/null | head -n 10 | tee -a "$log_file"
+        echo -e "${GREEN}✓ Análisis de espacio completado${NC}"
+        echo "✓ Análisis de espacio completado" >> "$log_file"
+    }
+
+    verificar_integridad_mejorada() {
+        echo -e "${BLUE}[TAREA 6] Verificar integridad del sistema...${NC}"
+        echo "[TAREA 6] Verificar integridad del sistema..." >> "$log_file"
+        local errores_encontrados=0
+
+        echo "=== VERIFICACIÓN DE SISTEMAS DE ARCHIVOS ===" | tee -a "$log_file"
+        local dispositivos
+        dispositivos=($(lsblk -ln -o NAME,MOUNTPOINT,FSTYPE 2>/dev/null | grep -E '(/boot|/|/home|/var)' | grep -vE '(swap|tmpfs|devtmpfs)' | awk '{print "/dev/"$1}'))
+        local dispositivo tipo_fs punto_montaje
+        for dispositivo in "${dispositivos[@]}"; do
+            [[ ! -e "$dispositivo" ]] && continue
+            tipo_fs=$(lsblk -ln -o FSTYPE "$dispositivo" 2>/dev/null | tail -1)
+            punto_montaje=$(lsblk -ln -o MOUNTPOINT "$dispositivo" 2>/dev/null | tail -1)
+            echo "Verificando $dispositivo ($tipo_fs) en $punto_montaje..." | tee -a "$log_file"
+            case "$tipo_fs" in
+                ext4|ext3|ext2)
+                    if sudo fsck."$tipo_fs" -p "$dispositivo" 2>&1 | grep -q "FILE SYSTEM WAS MODIFIED"; then
+                        echo -e "  ${YELLOW}⚠ Se realizaron reparaciones automáticas${NC}" | tee -a "$log_file"
+                        ((errores_encontrados++))
+                    else
+                        echo -e "  ${GREEN}✓ Verificación exitosa${NC}" | tee -a "$log_file"
+                    fi ;;
+                vfat|fat32)
+                    if sudo fsck.vfat -a "$dispositivo" >/dev/null 2>&1; then
+                        echo -e "  ${GREEN}✓ Verificación exitosa${NC}" | tee -a "$log_file"
+                    else
+                        echo -e "  ${YELLOW}⚠ Se requirió reparación${NC}" | tee -a "$log_file"
+                        ((errores_encontrados++))
+                    fi ;;
+                btrfs)
+                    if sudo btrfs check "$dispositivo" 2>&1 | grep -q "errors found"; then
+                        echo -e "  ${YELLOW}⚠ Se encontraron errores${NC}" | tee -a "$log_file"
+                        ((errores_encontrados++))
+                    else
+                        echo -e "  ${GREEN}✓ Verificación exitosa${NC}" | tee -a "$log_file"
+                    fi ;;
+                *) echo -e "  ${YELLOW}⚠ Tipo $tipo_fs: no implementado${NC}" | tee -a "$log_file" ;;
+            esac
+        done
+
+        echo "" | tee -a "$log_file"
+        echo "=== VERIFICACIÓN DE PAQUETES ===" | tee -a "$log_file"
+        local resultado
+        resultado=$(sudo pacman -Qk 2>&1)
+        if echo "$resultado" | grep -qE "(missing|error:)"; then
+            echo -e "  ${YELLOW}⚠ Problemas encontrados${NC}" | tee -a "$log_file"
+            ((errores_encontrados++))
+        else
+            echo -e "  ${GREEN}✓ Verificación satisfactoria${NC}" | tee -a "$log_file"
+        fi
+
+        echo "" | tee -a "$log_file"
+        echo "=== PAQUETES HUÉRFANOS ===" | tee -a "$log_file"
+        local huerfanos
+        huerfanos=$(pacman -Qdtq 2>/dev/null)
+        if [[ -n "$huerfanos" ]]; then
+            echo -e "${YELLOW}Paquetes huérfanos:${NC}" | tee -a "$log_file"
+            echo "$huerfanos" | tee -a "$log_file"
+            echo -ne "${YELLOW}¿Eliminarlos? (s/N): ${NC}"
+            read -r respuesta
+            if [[ "$respuesta" =~ ^[sSyY]$ ]]; then
+                sudo pacman -Rns $huerfanos 2>&1 | tee -a "$log_file"
+                echo -e "${GREEN}✓ Huérfanos eliminados${NC}" | tee -a "$log_file"
+            fi
+        else
+            echo -e "${GREEN}✓ No hay huérfanos${NC}" | tee -a "$log_file"
+        fi
+
+        echo "" | tee -a "$log_file"
+        echo "=== SERVICIOS CRÍTICOS ===" | tee -a "$log_file"
+        local servicios=("sshd" "cronie" "systemd-journald" "NetworkManager" "dbus")
+        local servicio
+        for servicio in "${servicios[@]}"; do
+            if systemctl is-active "$servicio" &>/dev/null; then
+                echo -e "  ${GREEN}✓ $servicio: ACTIVO${NC}" | tee -a "$log_file"
+            else
+                echo -e "  ${YELLOW}⚠ $servicio: INACTIVO${NC}" | tee -a "$log_file"
+            fi
+        done
+
+        echo "" | tee -a "$log_file"
+        if [[ $errores_encontrados -eq 0 ]]; then
+            echo -e "${GREEN}✓ Integridad verificada - Sin problemas${NC}" | tee -a "$log_file"
+        else
+            echo -e "${YELLOW}✓ Verificación completada - $errores_encontrados problemas${NC}" | tee -a "$log_file"
+        fi
+    }
+
+    rotar_logs() {
+        echo -e "${BLUE}[TAREA 7] Rotación automática de logs...${NC}"
+        echo "[TAREA 7] Rotación automática de logs..." >> "$log_file"
+        if [[ -d "$log_dir" ]]; then
+            local cantidad_logs
+            cantidad_logs=$(find "$log_dir" -name "mantenimiento_*.log" | wc -l)
+            if [[ $cantidad_logs -gt $max_logs ]]; then
+                find "$log_dir" -name "mantenimiento_*.log" -type f | sort | head -n "-$max_logs" | xargs rm -f 2>&1 | tee -a "$log_file"
+                echo -e "${GREEN}✓ Rotados - Mantenidos últimos $max_logs${NC}" | tee -a "$log_file"
+            else
+                echo -e "${GREEN}✓ Solo hay $cantidad_logs logs${NC}" | tee -a "$log_file"
+            fi
+        fi
+    }
+
+    # ================================================================
+    # SECCIÓN OMARCHY
+    # ================================================================
+    mantenimiento_omarchy() {
+        while true; do
+            clear
+            echo -e "${CYAN}"
+            echo "╔══════════════════════════════════════════════════════╗"
+            echo "║          MANTENIMIENTO DE OMARCHY                    ║"
+            echo "╚══════════════════════════════════════════════════════╝"
+            echo -e "${NC}"
+            echo -e "  ${YELLOW}1${NC}  Actualizar Omarchy y el sistema (omarchy update)"
+            echo -e "  ${YELLOW}2${NC}  Actualizar firmware (fwupd)"
+            echo -e "  ${YELLOW}3${NC}  Ver canal de actualización actual"
+            echo -e "  ${YELLOW}4${NC}  Cambiar canal de actualización"
+            echo -e "  ${YELLOW}5${NC}  Aplicar migraciones pendientes"
+            echo -e "  ${YELLOW}0${NC}  Volver al menú principal"
+            echo ""
+            echo -ne "${GREEN}Selecciona una opción: ${NC}"
+            read -r sub_opcion
+
+            case "$sub_opcion" in
+                1)
+                    echo ""
+                    echo -e "${CYAN}→ Lanzando el actualizador oficial de Omarchy...${NC}"
+                    echo -e "${YELLOW}  Este comando creará un snapshot antes de actualizar.${NC}"
+                    echo -e "${YELLOW}  Es posible que se solicite un reinicio al finalizar.${NC}"
+                    echo ""
+                    echo "[OMARCHY] omarchy update - $(date '+%Y-%m-%d %H:%M:%S')" >> "$log_file"
+                    omarchy update 2>&1 | tee -a "$log_file"
+                    ;;
+                2)
+                    echo ""
+                    echo -e "${CYAN}→ Actualizando firmware (fwupd)...${NC}"
+                    echo -e "${YELLOW}  Es posible que se solicite un reinicio.${NC}"
+                    echo ""
+                    echo "[OMARCHY] fwupdmgr update - $(date '+%Y-%m-%d %H:%M:%S')" >> "$log_file"
+                    sudo fwupdmgr refresh --force 2>&1 | tee -a "$log_file"
+                    sudo fwupdmgr update 2>&1 | tee -a "$log_file"
+                    ;;
+                3)
+                    echo ""
+                    echo -e "${CYAN}→ Canal de actualización actual:${NC}"
+                    echo ""
+                    omarchy channel current 2>/dev/null || echo -e "${YELLOW}  Comando no disponible. Prueba 'omarchy channel --help'.${NC}"
+                    ;;
+                4)
+                    echo ""
+                    echo -e "${YELLOW}Canales disponibles:${NC}"
+                    echo "  stable  →  Releases oficiales (recomendado)"
+                    echo "  rc      →  Release Candidate (antes del lanzamiento)"
+                    echo "  edge    →  Desarrollo (adelantado, menos estable)"
+                    echo "  dev     →  Git checkout directo (solo para desarrollo)"
+                    echo ""
+                    echo -n "  Introduce el nuevo canal (stable/rc/edge/dev): "
+                    read -r nuevo_canal
+                    if [[ "$nuevo_canal" =~ ^(stable|rc|edge|dev)$ ]]; then
+                        echo ""
+                        echo -e "${CYAN}→ Cambiando al canal '$nuevo_canal'...${NC}"
+                        omarchy channel set "$nuevo_canal" 2>&1 | tee -a "$log_file"
+                    else
+                        echo ""
+                        echo -e "${RED}Canal inválido. Usa: stable, rc, edge o dev.${NC}"
+                    fi
+                    ;;
+                5)
+                    echo ""
+                    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+                    echo -e "${CYAN}  MIGRACIONES DE OMARCHY                               ${NC}"
+                    echo -e "${CYAN}═══════════════════════════════════════════════════════${NC}"
+                    echo ""
+                    echo -e "${YELLOW}¿Qué son las migraciones?${NC}"
+                    echo ""
+                    echo "  Son scripts de un solo uso que Omarchy ejecuta para"
+                    echo "  actualizar la configuración de TU usuario cuando una"
+                    echo "  actualización del sistema cambia algo."
+                    echo ""
+                    echo -e "${YELLOW}¿Por qué existen?${NC}"
+                    echo ""
+                    echo "  Pacman NO puede tocar los archivos de ~/.config."
+                    echo "  Las migraciones sí, porque se ejecutan como TÚ (no"
+                    echo "  como root). Arreglan rutas, cambian formatos de"
+                    echo "  temas, actualizan preferencias del editor, etc."
+                    echo ""
+                    echo -e "${YELLOW}¿Cuándo se ejecutan normalmente?${NC}"
+                    echo ""
+                    echo "  1. Automáticamente durante 'omarchy update'."
+                    echo "  2. Al iniciar sesión si las ejecutaste tú solo"
+                    echo "     (ej: haciendo pacman -Syu por tu cuenta)."
+                    echo ""
+                    echo -e "${YELLOW}¿Son seguras?${NC}"
+                    echo ""
+                    echo "  Sí. Son idempotentes: si se ejecutan varias veces"
+                    echo "  el resultado es el mismo. Antes de cambiar algo,"
+                    echo "  comprueban si ya está cambiado."
+                    echo ""
+                    echo -e "${YELLOW}¿Qué pasa si NO las aplico?${NC}"
+                    echo ""
+                    echo "  Puedes quedar con configuración inconsistente:"
+                    echo "  paquetes nuevos con archivos de config viejos."
+                    echo "  Puede causar errores raros en el entorno."
+                    echo ""
+                    echo -e "${CYAN}───────────────────────────────────────────────────────${NC}"
+                    echo -e "${YELLOW}Comprobando migraciones pendientes...${NC}"
+                    echo ""
+
+                    local pending_output
+                    pending_output=$(omarchy-migrate --pending 2>&1)
+                    local pending_status=$?
+
+                    if [[ $pending_status -eq 0 && -n "$pending_output" ]]; then
+                        echo -e "${YELLOW}Migraciones pendientes:${NC}"
+                        echo "$pending_output" | tee -a "$log_file"
+                        echo ""
+                        echo -e "${CYAN}───────────────────────────────────────────────────────${NC}"
+                        echo -ne "${GREEN}¿Deseas aplicarlas ahora? (s/N): ${NC}"
+                        read -r confirm_migrate
+                        if [[ "$confirm_migrate" =~ ^[sSyY]$ ]]; then
+                            echo ""
+                            echo -e "${CYAN}→ Aplicando migraciones...${NC}"
+                            echo ""
+                            omarchy-migrate 2>&1 | tee -a "$log_file"
+                            echo ""
+                            echo -e "${GREEN}✓ Migraciones aplicadas.${NC}"
+                        else
+                            echo ""
+                            echo -e "${YELLOW}Migraciones canceladas. Puedes aplicarlas luego.${NC}"
+                        fi
+                    else
+                        echo -e "${GREEN}✓ No hay migraciones pendientes. Todo está al día.${NC}"
+                    fi
+                    ;;
+                0) break ;;
+                *)
+                    echo ""
+                    echo -e "${RED}Opción inválida.${NC}"
+                    ;;
+            esac
+
+            # Pausa al final (excepto si vamos a salir)
+            if [[ "$sub_opcion" != "0" ]]; then
+                echo ""
+                echo -e "${CYAN}─────────────────────────────────────────────────────${NC}"
+                echo -ne "${GREEN}Presiona [Enter] para volver al menú de Omarchy...${NC}"
+                read -r
+            fi
+        done
+    }
+
+    # ================================================================
+    # MENÚ PRINCIPAL
+    # ================================================================
+    mostrar_menu() {
+        clear
+        echo -e "${PURPLE}"
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║           🚀 SUPER MANTENIMIENTO 🚀                  ║"
+        echo "║          Sistema Linux - Todo en Uno                 ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}Selecciona las tareas a ejecutar (múltiple):${NC}"
+        echo -e "  ${YELLOW}1${NC}    Optimizar SSD (fstrim)"
+        echo -e "  ${YELLOW}2${NC}  🗑  Limpiar archivos temporales"
+        echo -e "  ${YELLOW}3${NC}  📦  Actualizar sistema completo (con yay)"
+        echo -e "  ${YELLOW}4${NC}  📜  Limpiar logs del sistema antiguos"
+        echo -e "  ${YELLOW}5${NC}  💾  Analizar espacio en disco"
+        echo -e "  ${YELLOW}6${NC}  🔍  Verificar integridad del sistema"
+        echo -e "  ${YELLOW}7${NC}  🔄  Rotación automática de logs"
+        echo -e "  ${YELLOW}8${NC}  🦅  Mantenimiento de Omarchy (update, firmware, canales)"
+        echo -e "  ${YELLOW}0${NC}  ▶  TODAS LAS ANTERIORES (Modo COMPLETO)"
+        echo -e "  ${YELLOW}q${NC}  🚪 Salir del mantenimiento"
+        echo ""
+        echo -e "${GREEN}Ingresa los números separados por espacios (ej: 1 3 5):${NC}"
+    }
+
+    # ================================================================
+    # INICIALIZACIÓN
+    # ================================================================
+    if [[ ! -d "$log_dir" ]]; then
+        mkdir -p "$log_dir" || {
+            echo -e "${RED}Error: No se pudo crear $log_dir${NC}"
+            return 1
+        }
+    fi
+
+    # ================================================================
+    # BUCLE PRINCIPAL
+    # ================================================================
+    while true; do
+        mostrar_menu
+        read -r respuesta
+
+        # Salir con q, Q, o Enter vacío
+        if [[ -z "$respuesta" || "$respuesta" == "q" || "$respuesta" == "Q" ]]; then
+            echo -e "${YELLOW}Saliendo del mantenimiento.${NC}"
+            break
+        fi
+
+        # Reset array de tareas en cada iteración
+        local -a opciones_seleccionadas=()
+
+        # Manejo del array de opciones
+        if [[ -n "$ZSH_VERSION" ]]; then
+            if [[ "$respuesta" == *0* ]]; then
+                opciones_seleccionadas=(1 2 3 4 5 6 7 8)
+            else
+                opciones_seleccionadas=(${(s: :)respuesta})
+            fi
+        else
+            case "$respuesta" in
+                *0*) opciones_seleccionadas=(1 2 3 4 5 6 7 8) ;;
+                *)
+                    for num in $respuesta; do
+                        if [[ "$num" =~ ^[1-8]$ ]]; then
+                            opciones_seleccionadas+=("$num")
+                        fi
+                    done
+                    ;;
+            esac
+        fi
+
+        if [[ ${#opciones_seleccionadas[@]} -eq 0 ]]; then
+            echo -e "${RED}No se seleccionó ninguna tarea.${NC}"
+            sleep 1
+            continue
+        fi
+
+        echo -e "${GREEN}Tareas seleccionadas: ${opciones_seleccionadas[*]}${NC}"
+        echo ""
+
+        # --- Log y timing de este batch ---
+        log_file="$log_dir/mantenimiento_$(date +%F_%T).log"
+        local batch_ts_inicio="$(date '+%Y-%m-%d %H:%M:%S')"
+        local batch_inicio_seg="$(date +%s)"
+        local exit_code=0
+
+        echo -e "${CYAN}Iniciando super mantenimiento...${NC}"
+        echo -e "${CYAN}Log: $log_file${NC}"
+        echo ""
+        echo "==============================================" > "$log_file"
+        echo "SUPER MANTENIMIENTO: $batch_ts_inicio" >> "$log_file"
+        echo "Usuario: $usuario_actual" >> "$log_file"
+        echo "Tareas: ${opciones_seleccionadas[*]}" >> "$log_file"
+        echo "==============================================" >> "$log_file"
+
+        # --- Ejecutar tareas ---
+        echo -e "${CYAN}Iniciando ejecución...${NC}"
+        echo ""
+        for tarea_num in "${opciones_seleccionadas[@]}"; do
+            case $tarea_num in
+                1) optimizar_ssd || exit_code=1 ;;
+                2) limpiar_temporales || exit_code=1 ;;
+                3) actualizar_sistema_completo || exit_code=1 ;;
+                4) limpiar_logs_antiguos || exit_code=1 ;;
+                5) analizar_espacio || exit_code=1 ;;
+                6) verificar_integridad_mejorada || exit_code=1 ;;
+                7) rotar_logs || exit_code=1 ;;
+                8) mantenimiento_omarchy || exit_code=1 ;;
+            esac
+            echo ""
+        done
+
+        # --- Cierre del log ---
+        local batch_ts_fin="$(date '+%Y-%m-%d %H:%M:%S')"
+        local batch_duracion="$(( $(date +%s) - batch_inicio_seg )) segundos"
+        echo "==============================================" >> "$log_file"
+        echo "FIN: $batch_ts_fin" >> "$log_file"
+        echo "Duración: $batch_duracion" >> "$log_file"
+        echo "Estado: $([ $exit_code -eq 0 ] && echo 'EXITOSO' || echo 'CON ERRORES')" >> "$log_file"
+        echo "==============================================" >> "$log_file"
+
+        # --- Resumen del batch ---
+        echo -e "${PURPLE}"
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║                 RESUMEN DEL BATCH                    ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}Mantenimiento completado:${NC}"
+        echo -e "  ${GREEN}• Tareas ejecutadas: ${#opciones_seleccionadas[@]}${NC}"
+        echo -e "  ${GREEN}• Duración: $batch_duracion${NC}"
+        echo -e "  ${GREEN}• Log: $log_file${NC}"
+        echo -e "  ${GREEN}• Estado: $([ $exit_code -eq 0 ] && echo '✓ ÉXITO' || echo '⚠ CON ERRORES')${NC}"
+        echo ""
+
+        # --- Notificación ---
+        if command -v notify-send &> /dev/null; then
+            if [[ $exit_code -eq 0 ]]; then
+                notify-send -i "dialog-information" "Super Mantenimiento" "✓ Tareas completadas!\nDuración: $batch_duracion"
+            else
+                notify-send -i "dialog-error" "Super Mantenimiento" "⚠ Algunas tareas fallaron\nLog: $log_file"
+            fi
+        fi
+
+        # --- Pausa antes de volver al menú ---
+        echo ""
+        echo -e "${CYAN}─────────────────────────────────────────────────────${NC}"
+        echo -ne "${GREEN}Presiona [Enter] para volver al menú de mantenimiento...${NC}"
+        read -r
+    done
+
+    echo -e "${GREEN}Mantenimiento cerrado. ¡Hasta la próxima!${NC}"
+    return 0
+}

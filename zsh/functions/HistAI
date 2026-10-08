@@ -1,0 +1,59 @@
+# HistAI
+# ================================================================
+# Búsqueda interactiva en el historial de comandos.
+#
+# Muestra los últimos 20 comandos únicos (sin duplicados) y permite
+# elegir uno con fzf. El comando seleccionado se pone en la línea
+# de comandos para que puedas editarlo antes de ejecutarlo.
+#
+# Atajo: Ctrl+K (bindkey '^k' en 50-keybindings.zsh)
+#
+# Uso: se invoca con la tecla, no escribiendo el nombre.
+#
+# NOTA: es un widget de zle (Zsh Line Editor). Modifica $LBUFFER.
+# ================================================================
+
+HistAI() {
+    # $LBUFFER = lo que ya hay escrito antes del cursor.
+    local comando_actual="$LBUFFER"
+
+    # Obtener últimos 20 comandos únicos.
+    # - fc -l 1 → lista todo el historial.
+    # - sed → quita los números de línea al principio.
+    # - grep -v '^$' → quita líneas vacías.
+    # - tac → invierte el orden (más reciente primero).
+    # - awk '!seen[$0]++' → elimina duplicados, manteniendo el orden.
+    # - head -n 20 → solo los primeros 20.
+    local historial
+    historial=$(fc -l 1 2>/dev/null \
+        | sed 's/^[[:space:]]*[0-9]*[[:space:]]*//' \
+        | grep -v '^$' \
+        | tac \
+        | awk '!seen[$0]++' \
+        | head -n 20)
+
+    # Construir el comando fzf.
+    local fzf_cmd=(
+        fzf
+        --no-sort
+        --reverse
+        --prompt="HistAI (últimos 20 únicos) > "
+        --height=40%
+        --bind='up:up,down:down'
+        --bind='ctrl-d:down,ctrl-u:up,esc:abort'
+        --color='hl:196,hl+:196,pointer:099,marker:099'
+    )
+
+    # Si ya hay algo escrito en la línea, usarlo como búsqueda inicial.
+    [[ -n "$comando_actual" ]] && fzf_cmd+=(--query="$comando_actual")
+
+    # Mostrar fzf y capturar la selección.
+    local seleccion
+    seleccion=$(printf '%s\n' "$historial" | "${fzf_cmd[@]}")
+
+    # Si el usuario eligió algo, ponerlo en la línea.
+    if [[ -n "$seleccion" ]]; then
+        LBUFFER="$seleccion"
+        zle redisplay
+    fi
+}
