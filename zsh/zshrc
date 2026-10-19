@@ -23,4 +23,4 @@ autoload -Uz \
     mantenimiento cryptosith bc-calc zellij-layout \
     ufw-manager clamav-virus menu-principal search-aliases \
     HistAI HistAI_Preview _histai_preview nano-script \
-    _cryptosith
+    _cryptosith suite-watch vpn rmsymlinks checksymlinks \

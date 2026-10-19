@@ -1,0 +1,80 @@
+#!/usr/bin/env zsh
+# ============================================================================
+# checksymlinks
+# ----------------------------------------------------------------------------
+# SINTAXIS
+#   checksymlinks
+#
+# DESCRIPCIÓN
+#   Audita los enlaces simbólicos de un directorio y ofrece limpiar los
+#   rotos. Un enlace está "roto" cuando apunta a un destino inexistente
+#   (porque se movió o borró el original).
+#
+#   El prompt de directorio usa vared, por lo que Tab autocompleta
+#   rutas igual que en la línea de comandos normal.
+#
+#   Flujo:
+#     1. Pide el directorio (Enter = directorio actual).
+#     2. Cuenta total, válidos y rotos.
+#     3. Lista los rotos como "ruta -> destino".
+#     4. Pide confirmación (s/N) y los elimina.
+#   Usa sudo si el directorio no es escribible.
+#
+# USO
+#   $ checksymlinks
+#
+# EJEMPLOS
+#   # Auditar el home entero (recursivo):
+#   $ checksymlinks
+#   Directorio [.]: ~
+#
+#   # Revisar un directorio concreto:
+#   $ checksymlinks
+#   Directorio [.]: /opt/app/bin
+#
+# SALIDA TÍPICA
+#   Directorio: /home/user/proyectos
+#     Total:   420
+#     Válidos: 398
+#     Rotos:   22
+#   ...lista de rotos...
+#   ¿Borrar 22 rotos? (s/N):
+#
+# NOTAS
+#   - Depende de GNU find (flags -xtype l y -printf).
+#   - Complementa a rmsymlinks (este borra TODOS; este solo los rotos).
+# ============================================================================
+checksymlinks() {
+    emulate -L zsh
+    local dir total broken ok resp need_sudo
+
+    print -r -- "\n=== Auditoría de symlinks ===\n"
+    dir=""
+    vared -p "Directorio [.]: " -c dir
+    [[ -z $dir ]] && dir="."
+    [[ -d $dir ]] || { print -ru2 -- "ERROR: no es directorio."; return 1 }
+    dir=${dir:A}
+
+    need_sudo=0
+    [[ -w $dir ]] || need_sudo=1
+    local -a run
+    (( need_sudo )) && run=(sudo) || run=()
+
+    total=$(find "$dir" -type l 2>/dev/null | wc -l)
+    broken=$(find "$dir" -xtype l 2>/dev/null | wc -l)
+    ok=$(( total - broken ))
+
+    print -r -- "\nDirectorio: $dir"
+    print -r -- "  Total:   $total\n  Válidos: $ok\n  Rotos:   $broken"
+
+    (( broken == 0 )) && { print "\nSin rotos."; return 0 }
+
+    print -r -- "\nRotos:"
+    find "$dir" -xtype l -printf '  %p -> %l\n' 2>/dev/null
+
+    read "resp?¿Borrar $broken rotos? (s/N): "
+    [[ $resp == [sSyY]* ]] || { print "Cancelado."; return 0 }
+
+    $run find "$dir" -xtype l -print -delete
+    print "\nHecho."
+}

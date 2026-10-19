@@ -1,0 +1,28 @@
+# Función rápida para gestionar Proton VPN
+vpn() {
+    case "$1" in
+        on|connect)
+            echo "🔌 Conectando a Proton VPN..."
+            shift # Elimina el primer argumento para pasar el resto (ej. país)
+            protonvpn connect "$@"
+            ;;
+        off|disconnect)
+            echo "🔌 Desconectando Proton VPN..."
+            protonvpn disconnect
+            ;;
+        status|st)
+            echo "📡 Estado de la conexión:"
+            protonvpn status
+            ;;
+        *)
+            echo "Uso: vpn [comando]"
+            echo ""
+            echo "Comandos disponibles:"
+            echo "  vpn on         - Conectar al servidor más rápido disponible"
+            echo "  vpn on US      - Conectar a un país específico (ej. US, ES, NL)"
+            echo "  vpn off        - Desconectar la VPN"
+            echo "  vpn status     - Ver el estado actual y tu IP"
+            echo ""
+            ;;
+    esac
+}

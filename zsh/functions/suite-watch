@@ -1,0 +1,147 @@
+# suite-watch
+# ================================================================
+# Menú de acceso a las herramientas de NetWatch Labs (TUI de
+# diagnóstico del sistema).
+#
+# Herramientas:
+#   - netwatch    → Red (tráfico, conexiones, latencia)
+#   - syswatch    → Sistema (CPU, RAM, discos, GPU, energía)
+#   - diskwatch   → Disco (procesos de I/O, uso)
+#   - soundwatch  → Audio (PipeWire/PulseAudio)
+#   - kernwatch   → Kernel (dmesg, módulos, carga)
+#
+# Cada herramienta se puede lanzar en 2 modos:
+#   - Sin sudo: vista básica, sin privilegios.
+#   - Con sudo: acceso completo (más información).
+#
+# Uso:  suite-watch
+# Alias: sw (en 95-func-shortcuts.sh)
+#
+# Proyecto: https://www.netwatchlabs.com/
+# ================================================================
+
+suite-watch() {
+    # --- Colores ---
+    local -r RED='\033[0;31m'
+    local -r GREEN='\033[0;32m'
+    local -r YELLOW='\033[1;33m'
+    local -r BLUE='\033[0;34m'
+    local -r PURPLE='\033[0;35m'
+    local -r CYAN='\033[0;36m'
+    local -r BOLD='\033[1m'
+    local -r NC='\033[0m'
+
+    # ================================================================
+    # AUXILIAR: lanzar una herramienta con o sin sudo
+    # ================================================================
+    _sw_run() {
+        local tool="$1"
+        local use_sudo="$2"
+
+        if ! command -v "$tool" &>/dev/null; then
+            echo -e "${RED}✗ '$tool' no está instalado.${NC}"
+            echo -e "${YELLOW}Instálalo antes de usarlo.${NC}"
+            echo -e "${CYAN}  https://www.netwatchlabs.com/${NC}"
+            sleep 2
+            return 1
+        fi
+
+        echo ""
+        if [[ "$use_sudo" == "true" ]]; then
+            echo -e "${RED}→ Lanzando '$tool' con sudo (acceso completo)...${NC}"
+            sleep 1
+            sudo "$tool"
+        else
+            echo -e "${GREEN}→ Lanzando '$tool' sin sudo...${NC}"
+            sleep 1
+            "$tool"
+        fi
+    }
+
+    # ================================================================
+    # VERIFICAR QUE AL MENOS UNA HERRAMIENTA ESTÁ INSTALADA
+    # ================================================================
+    local -a tools=(netwatch syswatch diskwatch soundwatch kernwatch)
+    local installed=0
+    local t
+    for t in "${tools[@]}"; do
+        command -v "$t" &>/dev/null && ((installed++))
+    done
+
+    if (( installed == 0 )); then
+        clear
+        echo -e "${RED}✗ No se encontró ninguna herramienta de NetWatch Labs.${NC}"
+        echo ""
+        echo -e "${YELLOW}Herramientas buscadas:${NC} netwatch, syswatch, diskwatch, soundwatch, kernwatch"
+        echo ""
+        echo -e "${CYAN}Instalación:${NC}"
+        echo -e "  ${YELLOW}Homebrew:${NC}"
+        echo "    brew install matthart1983/tap/netwatch"
+        echo -e "  ${YELLOW}Nix:${NC}"
+        echo "    nix-shell -p netwatch"
+        echo ""
+        echo -e "${CYAN}Más info: https://www.netwatchlabs.com/${NC}"
+        return 1
+    fi
+
+    # ================================================================
+    # BUCLE PRINCIPAL
+    # ================================================================
+    while true; do
+        clear
+        echo -e "${PURPLE}"
+        echo "╔══════════════════════════════════════════════════════╗"
+        echo "║        🔍 SUITE-WATCH — NetWatch Labs 🔍             ║"
+        echo "║        Diagnóstico del sistema (TUI en Rust)         ║"
+        echo "╚══════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}Selecciona herramienta y modo:${NC}"
+        echo ""
+        echo -e "  ${YELLOW}1${NC}  netwatch      ${CYAN}→ Red${NC}                    ${GREEN}[sin sudo]${NC}"
+        echo -e "  ${YELLOW}2${NC}  netwatch      ${CYAN}→ Red${NC}                    ${RED}[con sudo]${NC}"
+        echo -e "  ${YELLOW}3${NC}  syswatch      ${CYAN}→ CPU / RAM / GPU / Energía${NC}    ${GREEN}[sin sudo]${NC}"
+        echo -e "  ${YELLOW}4${NC}  syswatch      ${CYAN}→ CPU / RAM / GPU / Energía${NC}    ${RED}[con sudo]${NC}"
+        echo -e "  ${YELLOW}5${NC}  diskwatch     ${CYAN}→ Disco / Procesos de I/O${NC}      ${GREEN}[sin sudo]${NC}"
+        echo -e "  ${YELLOW}6${NC}  diskwatch     ${CYAN}→ Disco / Procesos de I/O${NC}      ${RED}[con sudo]${NC}"
+        echo -e "  ${YELLOW}7${NC}  soundwatch    ${CYAN}→ Audio (PipeWire/Pulse)${NC}       ${GREEN}[sin sudo]${NC}"
+        echo -e "  ${YELLOW}8${NC}  soundwatch    ${CYAN}→ Audio (PipeWire/Pulse)${NC}       ${RED}[con sudo]${NC}"
+        echo -e "  ${YELLOW}9${NC}  kernwatch     ${CYAN}→ Kernel / dmesg${NC}               ${GREEN}[sin sudo]${NC}"
+        echo -e "  ${YELLOW}10${NC} kernwatch     ${CYAN}→ Kernel / dmesg${NC}               ${RED}[con sudo]${NC}"
+        echo ""
+        echo -e "  ${YELLOW}0${NC}  ${BOLD}Salir${NC}"
+        echo ""
+        echo -ne "${GREEN}👉 Opción [0-10]: ${NC}"
+        read -r choice
+
+        case "$choice" in
+            1)  _sw_run netwatch   false ;;
+            2)  _sw_run netwatch   true  ;;
+            3)  _sw_run syswatch   false ;;
+            4)  _sw_run syswatch   true  ;;
+            5)  _sw_run diskwatch  false ;;
+            6)  _sw_run diskwatch  true  ;;
+            7)  _sw_run soundwatch false ;;
+            8)  _sw_run soundwatch true  ;;
+            9)  _sw_run kernwatch  false ;;
+            10) _sw_run kernwatch  true  ;;
+            0)
+                echo ""
+                echo -e "${GREEN}👋 Saliendo de suite-watch.${NC}"
+                return 0
+                ;;
+            *)
+                echo ""
+                echo -e "${RED}✗ Opción inválida.${NC}"
+                sleep 1
+                ;;
+        esac
+
+        # Pausa para volver al menú (excepto si se sale)
+        if [[ "$choice" != "0" ]]; then
+            echo ""
+            echo -e "${CYAN}──────────────────────────────────────────────────────${NC}"
+            echo -ne "${GREEN}Presiona [Enter] para volver al menú...${NC}"
+            read -r
+        fi
+    done
+}

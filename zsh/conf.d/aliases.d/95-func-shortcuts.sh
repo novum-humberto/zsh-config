@@ -16,7 +16,8 @@ alias mantenimiento-avanzado='mantenimiento'
 alias virus='clamav-virus'
 alias ufw-menu='ufw-manager'
 alias cryp='cryptosith'
-
+alias sw='suite-watch'
 # --- Búsqueda y utilidades ---
 alias ba='search-aliases'
 alias new-script='nano-script'
+

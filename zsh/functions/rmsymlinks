@@ -1,0 +1,88 @@
+#!/usr/bin/env zsh
+# ============================================================================
+# rmsymlinks
+# ----------------------------------------------------------------------------
+# SINTAXIS
+#   rmsymlinks
+#
+# DESCRIPCIÓN
+#   Borra enlaces simbólicos de un directorio de forma interactiva.
+#   Nunca toca archivos regulares ni directorios: solo entradas con
+#   tipo "l" (symlink). Muestra un menú para elegir entre listar o
+#   borrar, en la carpeta indicada o recursivamente.
+#   Si el directorio está bajo rutas del sistema (/usr, /etc, /var,
+#   /opt, /boot, /lib, /lib64, /bin, /sbin, /root) o no tienes permiso
+#   de escritura, ejecuta find con sudo (pide contraseña si hace falta).
+#
+#   El prompt de directorio usa vared, por lo que Tab autocompleta
+#   rutas igual que en la línea de comandos normal.
+#
+# USO
+#   $ rmsymlinks
+#
+# EJEMPLOS
+#   # Uso normal, interactivo (Tab para autocompletar rutas):
+#   $ rmsymlinks
+#   Directorio [.]: ~/Descargas
+#   ... menú ...
+#
+#   # Sobre un directorio del sistema (pedirá sudo automáticamente):
+#   $ rmsymlinks
+#   Directorio [.]: /usr/local/lib
+#
+# NOTAS
+#   - Depende de GNU find (flags -printf). En Arch/Omarchy es el default.
+#   - Para auditar y limpiar solo los rotos, usa: checksymlinks
+# ============================================================================
+rmsymlinks() {
+    emulate -L zsh
+    local dir maxdepth mode count confirm need_sudo
+
+    print -r -- "\n=== Borrar enlaces simbólicos ===\n"
+    dir=""
+    vared -p "Directorio [.]: " -c dir
+    [[ -z $dir ]] && dir="."
+    [[ -d $dir ]] || { print -ru2 -- "ERROR: '$dir' no es directorio."; return 1 }
+
+    dir=${dir:A}
+
+    need_sudo=0
+    case $dir in
+        /usr/*|/etc/*|/var/*|/opt/*|/boot/*|/lib/*|/lib64/*|/bin/*|/sbin/*|/root/*)
+            (( EUID != 0 )) && need_sudo=1 ;;
+    esac
+    [[ $need_sudo -eq 0 && ! -w $dir ]] && need_sudo=1
+
+    print -r -- "\nDirectorio: $dir"
+    (( need_sudo )) && print -r -- "Modo: sudo"
+
+    print -r -- "\n  1) Listar (carpeta)\n  2) Listar (recursivo)"
+    print -r -- "  3) Borrar (carpeta)\n  4) Borrar (recursivo)\n  5) Cancelar"
+    read "mode?Elige [1-5]: "
+
+    local -a fdepth
+    local do_delete=0
+    case $mode in
+        1) fdepth=(-maxdepth 1) ;;
+        2) fdepth=() ;;
+        3) fdepth=(-maxdepth 1); do_delete=1 ;;
+        4) fdepth=(); do_delete=1 ;;
+        *) print "Cancelado."; return 0 ;;
+    esac
+
+    local -a run
+    (( need_sudo )) && run=(sudo) || run=()
+
+    count=$($run find "$dir" $fdepth -type l 2>/dev/null | wc -l)
+    (( count == 0 )) && { print "\nNo hay enlaces."; return 0 }
+    print -r -- "\nEnlaces: $count\n"
+    $run find "$dir" $fdepth -type l -printf '  %p -> %l\n' 2>/dev/null
+
+    (( do_delete )) || return 0
+
+    read "confirm?¿Borrar $count enlaces? (s/N): "
+    [[ $confirm == [sSyY]* ]] || { print "Cancelado."; return 0 }
+
+    $run find "$dir" $fdepth -type l -print -delete
+    print -r -- "\nHecho."
+}

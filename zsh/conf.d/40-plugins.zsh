@@ -103,7 +103,7 @@ source /usr/share/zsh/plugins/zsh-sudo/sudo.plugin.zsh
 # 7. zsh-timer
 # ----------------------------------------------------------------
 # Muestra el tiempo de ejecución de cada comando (si tarda > 1s).
-source /usr/share/zsh/plugins/zsh-timer/timer.plugin.zsh
+#source /usr/share/zsh/plugins/zsh-timer/timer.plugin.zsh
 
 # ----------------------------------------------------------------
 # 8. zsh-systemd
