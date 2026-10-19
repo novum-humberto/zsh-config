@@ -2,20 +2,7 @@
 
 ## 📄 `README.md`
 
-**Ubicación**: `~/dev/proyectos/Git/zsh-config/README.md`
-
-**Comando**:
-```bash
-cd ~/dev/proyectos/Git/zsh-config
-nvim README.md
-```
-
-**Contenido completo**:
-
-
-# zsh-config
-
-Configuración modular de Zsh para  ( Linux). 
+Configuración modular de Zsh para Linux.
 
 > **De un `.zshrc` de 5000 líneas a 30 archivos pequeños y mantenibles.**
 > Arranque 40 veces más rápido (~2s → ~0.05s).
@@ -79,11 +66,13 @@ zsh-config/
 │   │   ├── 90-startup.zsh
 │   │   └── aliases.d/
 │   │       ├── 00-core.sh
+│   │       ├── 05-omarchy-keybindings.sh
 │   │       ├── 10-fs.sh
 │   │       ├── 20-git.sh
 │   │       ├── 30-pacman-yay.sh
 │   │       ├── 40-systemd.sh
 │   │       ├── 42-services.sh
+│   │       ├── 45-pasword-corretion.sh
 │   │       ├── 50-clamav.sh
 │   │       ├── 60-rclone.sh
 │   │       ├── 70-media.sh
@@ -101,7 +90,11 @@ zsh-config/
 │       ├── _histai_preview
 │       ├── mantenimiento
 │       ├── ufw-manager
-│       └── menu-principal
+│       ├── menu-principal
+│       ├── rmsymlinks
+│       ├── checksymlinks
+│       ├── suite-watch
+│       └── vpn
 │
 └── scripts/
     └── zsh-backup         ← script de backup/restauración
@@ -119,12 +112,12 @@ zsh-config/
 | **Plugins** | `40-plugins.zsh` | fzf-tab, autosuggestions, syntax-highlighting |
 | **Tema** | `42-dracula-theme.zsh` | Colores Dracula |
 | **Keybindings** | `50-keybindings.zsh` | Atajos de teclado |
-| **Aliases** | `60-aliases.zsh` + `aliases.d/` | 12 archivos por dominio |
+| **Aliases** | `60-aliases.zsh` + `aliases.d/` | 14 archivos por dominio |
 | **Prompt** | `70-prompt.zsh` | Prompt dinámico con iconos |
 | **Hooks** | `80-hooks.zsh` | `precmd` con `vcs_info` |
 | **Startup** | `90-startup.zsh` | Comandos al abrir terminal |
 
-### Funciones (11)
+### Funciones (15)
 
 | Función | Qué hace |
 |---------|----------|
@@ -135,10 +128,16 @@ zsh-config/
 | `clamav-virus` | Menú interactivo de ClamAV |
 | `HistAI` | Búsqueda en historial con fzf |
 | `HistAI_Preview` | Igual pero con vista previa |
-| `mantenimiento` | Super mantenimiento del sistema |
+| `_histai_preview` | Auxiliar de `HistAI_Preview` (genera el preview) |
+| `mantenimiento` | Super mantenimiento del sistema (con submenú Omarchy) |
 | `ufw-manager` | Gestor interactivo de firewall |
-| `menu-principal` | Menú central con acceso a todo |
-| `zsh-backup` | Backup/restauración de esta config |
+| `menu-principal` | Menú central por secciones con acceso a todo |
+| `rmsymlinks` | Borra enlaces simbólicos de un directorio |
+| `checksymlinks` | Audita y limpia enlaces rotos |
+| `suite-watch` | Diagnóstico del sistema |
+| `vpn` | Gestor de conexión Proton VPN |
+
+**Nota**: `zsh-backup` vive en `scripts/` y se instala en `~/.local/bin/`. Es un script independiente, no una función autoload.
 
 ---
 
@@ -217,7 +216,6 @@ menu
 ## 🎨 Captura
 
 ![Prompt de zsh-config](assets/Captura-Prompt.png)
-
 
 ---
 
