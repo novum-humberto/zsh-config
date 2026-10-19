@@ -325,19 +325,19 @@ fi
 
 # 5.4. Verificar aliases
 N_ALIASES=$(ls "$ZSH_DIR_DST/conf.d/aliases.d/"*.sh 2>/dev/null | wc -l)
-if [[ "$N_ALIASES" -ge 12 ]]; then
-    ok "Archivos de aliases: $N_ALIASES (esperado ≥12)."
+if [[ "$N_ALIASES" -ge 14 ]]; then
+    ok "Archivos de aliases: $N_ALIASES (esperado ≥14)."
 else
-    err "Archivos de aliases: $N_ALIASES (esperado ≥12)."
+    err "Archivos de aliases: $N_ALIASES (esperado ≥14)."
     ((ERRORS++))
 fi
 
 # 5.5. Verificar funciones
 N_FUNCS=$(ls "$ZSH_DIR_DST/functions/" 2>/dev/null | wc -l)
-if [[ "$N_FUNCS" -ge 11 ]]; then
-    ok "Funciones: $N_FUNCS (esperado ≥11)."
+if [[ "$N_FUNCS" -ge 15 ]]; then
+    ok "Funciones: $N_FUNCS (esperado ≥15)."
 else
-    err "Funciones: $N_FUNCS (esperado ≥11)."
+    err "Funciones: $N_FUNCS (esperado ≥15)."
     ((ERRORS++))
 fi
 

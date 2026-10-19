@@ -138,7 +138,7 @@ ls ~/.config/zsh/conf.d/aliases.d/*.sh | wc -l
 
 # Verificar funciones
 ls ~/.config/zsh/functions/ | wc -l
-# Debe ser 11 (o 13 si instalas cryptosith)
+# Debe ser 15 (o 17 si instalas cryptosith)
 
 # Verificar script
 ls -la ~/.local/bin/zsh-backup
